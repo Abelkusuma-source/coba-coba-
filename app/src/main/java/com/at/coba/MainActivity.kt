@@ -13,13 +13,13 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.padding
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
@@ -41,6 +41,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             val themeMode by dataStoreManager.themeMode.collectAsState(initial = DataStoreManager.MODE_SYSTEM_DEFAULT)
+            val hasUserAgreed by dataStoreManager.hasUserAgreed.collectAsState(initial = null)
             
             val darkTheme = when (themeMode) {
                 DataStoreManager.MODE_LIGHT -> false
@@ -52,7 +53,17 @@ class MainActivity : ComponentActivity() {
             RequestNotificationPermission()
 
             CobaTheme(darkTheme = darkTheme) {
-                MainScreen(dataStoreManager)
+                Surface(color = MaterialTheme.colorScheme.background) {
+                    if (hasUserAgreed == null) {
+                        // Menunggu data dari DataStore
+                    } else if (!hasUserAgreed!!) {
+                        UserAgreementScreen(dataStoreManager) {
+                            // Re-composition akan terjadi setelah dataStore diupdate
+                        }
+                    } else {
+                        MainScreen(dataStoreManager)
+                    }
+                }
             }
         }
     }
@@ -60,15 +71,11 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun RequestNotificationPermission() {
-    // Launcher untuk Izin Notifikasi (Android 13+)
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
-    ) { _ -> 
-        // Izin diproses oleh sistem
-    }
+    ) { _ -> }
 
     LaunchedEffect(Unit) {
-        // Minta izin notifikasi jika di Android 13 ke atas
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
