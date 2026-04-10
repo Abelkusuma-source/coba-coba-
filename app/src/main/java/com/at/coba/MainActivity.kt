@@ -1,9 +1,13 @@
 package com.at.coba
 
+import android.Manifest
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
@@ -44,9 +48,29 @@ class MainActivity : ComponentActivity() {
                 else -> isSystemInDarkTheme()
             }
 
+            // Permintaan Izin Otomatis (Hanya Notifikasi)
+            RequestNotificationPermission()
+
             CobaTheme(darkTheme = darkTheme) {
                 MainScreen(dataStoreManager)
             }
+        }
+    }
+}
+
+@Composable
+fun RequestNotificationPermission() {
+    // Launcher untuk Izin Notifikasi (Android 13+)
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { _ -> 
+        // Izin diproses oleh sistem
+    }
+
+    LaunchedEffect(Unit) {
+        // Minta izin notifikasi jika di Android 13 ke atas
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
     }
 }
