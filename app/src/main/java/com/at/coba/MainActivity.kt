@@ -117,8 +117,12 @@ fun MainScreen(dataStoreManager: DataStoreManager) {
                 actions = {
                     if (!isDebugScreen) {
                         IconButton(onClick = { 
-                            navController.navigate(Screen.Debug.route) {
+                            navController.navigate(Screen.Debug.route){
+                                popUpTo(navController.graph.findStartDestination().id) {
+                                    saveState = true
+                                }
                                 launchSingleTop = true
+                                restoreState = true
                             }
                         }) {
                             Icon(Icons.Default.BugReport, contentDescription = "Debug")
