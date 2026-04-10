@@ -4,16 +4,14 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.ExperimentalAnimationApi
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -33,15 +31,20 @@ import com.at.coba.ui.theme.CobaTheme
 class MainActivity : ComponentActivity() {
     private lateinit var dataStoreManager: DataStoreManager
 
-    @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         dataStoreManager = DataStoreManager(this)
         enableEdgeToEdge()
         setContent {
-            val isDarkMode by dataStoreManager.isDarkMode.collectAsState(initial = false)
+            val themeMode by dataStoreManager.themeMode.collectAsState(initial = DataStoreManager.MODE_SYSTEM_DEFAULT)
+            
+            val darkTheme = when (themeMode) {
+                DataStoreManager.MODE_LIGHT -> false
+                DataStoreManager.MODE_DARK -> true
+                else -> isSystemInDarkTheme()
+            }
 
-            CobaTheme(darkTheme = isDarkMode ?: false) {
+            CobaTheme(darkTheme = darkTheme) {
                 MainScreen(dataStoreManager)
             }
         }
@@ -56,19 +59,39 @@ fun MainScreen(dataStoreManager: DataStoreManager) {
     val currentDestination = navBackStackEntry?.destination
     val buildVersion = "v6.6.6"
 
-    val currentScreen = bottomNavItems.find { screen ->
-        currentDestination?.hierarchy?.any { it.route == screen.route } == true
-    } ?: Screen.Trade
+    val isTopLevelDestination = bottomNavItems.any { it.route == currentDestination?.route }
+    val isDebugScreen = currentDestination?.route == Screen.Debug.route
 
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
                 title = {
-                    Text(text = "${currentScreen.title} $buildVersion")
+                    val title = when (currentDestination?.route) {
+                        Screen.Trade.route -> Screen.Trade.title
+                        Screen.History.route -> Screen.History.title
+                        Screen.Web.route -> Screen.Web.title
+                        Screen.Profile.route -> Screen.Profile.title
+                        Screen.Debug.route -> Screen.Debug.title
+                        else -> "App"
+                    }
+                    Text(text = "$title $buildVersion")
+                },
+                navigationIcon = {
+                    if (!isTopLevelDestination && currentDestination != null) {
+                        IconButton(onClick = { navController.navigateUp() }) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        }
+                    }
                 },
                 actions = {
-                    IconButton(onClick = { navController.navigate(Screen.Debug.route) }) {
-                        Icon(Icons.Default.BugReport, contentDescription = "Debug")
+                    if (!isDebugScreen) {
+                        IconButton(onClick = { 
+                            navController.navigate(Screen.Debug.route) {
+                                launchSingleTop = true
+                            }
+                        }) {
+                            Icon(Icons.Default.BugReport, contentDescription = "Debug")
+                        }
                     }
                 }
             )
@@ -76,10 +99,11 @@ fun MainScreen(dataStoreManager: DataStoreManager) {
         bottomBar = {
             NavigationBar {
                 bottomNavItems.forEach { screen ->
+                    val selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true
                     NavigationBarItem(
                         icon = { Icon(screen.icon, contentDescription = null) },
                         label = { Text(screen.title) },
-                        selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true,
+                        selected = selected,
                         onClick = {
                             navController.navigate(screen.route) {
                                 popUpTo(navController.graph.findStartDestination().id) {
