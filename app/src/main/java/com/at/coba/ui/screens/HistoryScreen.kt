@@ -33,7 +33,7 @@ fun HistoryScreen() {
     }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        // Baris pertama filter: Status dan Pair dibagi rata (weight 1f) agar tidak terpotong
+        // Baris pertama filter: Status dan Pair
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -42,20 +42,20 @@ fun HistoryScreen() {
                 label = "Status",
                 options = listOf("All", "won", "lost", "standoff"),
                 selectedOption = statusFilter,
-                modifier = Modifier.weight(1f) // Memberikan ruang proporsional
+                modifier = Modifier.weight(1f) // Memberikan bobot agar seimbang dan tidak terpotong
             ) { statusFilter = it }
 
             FilterDropdown(
                 label = "Pair",
                 options = listOf("All", "ASIA/X", "USD/USDT"),
                 selectedOption = pairFilter,
-                modifier = Modifier.weight(1f) // Memberikan ruang proporsional agar tidak terpotong
+                modifier = Modifier.weight(1f) // Memberikan bobot agar seimbang dan tidak terpotong
             ) { pairFilter = it }
         }
         
         Spacer(modifier = Modifier.height(8.dp))
         
-        // Filter Wallet (baris kedua, penuh)
+        // Filter Wallet
         FilterDropdown(
             label = "Wallet",
             options = listOf("All", "Real - IDR", "Demo - USD", "Real - USD"),
@@ -76,9 +76,9 @@ fun HistoryScreen() {
 @Composable
 fun HistoryCard(item: HistoryItem) {
     val statusColor = when (item.status.lowercase()) {
-        "won" -> Color(0xFF4CAF50) // Hijau
-        "lost" -> Color(0xFFF44336) // Merah
-        else -> MaterialTheme.colorScheme.onSurfaceVariant // Abu-abu untuk standoff
+        "won" -> Color(0xFF4CAF50)
+        "lost" -> Color(0xFFF44336)
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
     }
 
     Card(
@@ -134,7 +134,7 @@ fun FilterDropdown(
             modifier = Modifier
                 .menuAnchor()
                 .fillMaxWidth(),
-            textStyle = MaterialTheme.typography.bodySmall // Ukuran teks diperkecil sedikit agar muat di kolom kecil
+            textStyle = MaterialTheme.typography.bodySmall
         )
         ExposedDropdownMenu(
             expanded = expanded,

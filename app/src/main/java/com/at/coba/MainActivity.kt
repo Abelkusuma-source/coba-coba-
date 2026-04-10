@@ -40,7 +40,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             val isDarkMode by dataStoreManager.isDarkMode.collectAsState(initial = false)
-            
+
             CobaTheme(darkTheme = isDarkMode ?: false) {
                 MainScreen(dataStoreManager)
             }
@@ -63,8 +63,8 @@ fun MainScreen(dataStoreManager: DataStoreManager) {
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
-                title = { 
-                    Text(text = "${currentScreen.title} $buildVersion") 
+                title = {
+                    Text(text = "${currentScreen.title} $buildVersion")
                 },
                 actions = {
                     IconButton(onClick = { navController.navigate(Screen.Debug.route) }) {
