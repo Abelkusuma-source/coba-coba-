@@ -1,8 +1,6 @@
 package com.at.coba.ui.screens
 
 import android.view.ViewGroup
-import android.webkit.WebResourceError
-import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.foundation.layout.fillMaxSize
@@ -21,32 +19,22 @@ fun WebScreen() {
                     ViewGroup.LayoutParams.MATCH_PARENT
                 )
                 
-                // Konfigurasi WebView agar lebih stabil
-                webViewClient = object : WebViewClient() {
-                    override fun onReceivedError(
-                        view: WebView?,
-                        request: WebResourceRequest?,
-                        error: WebResourceError?
-                    ) {
-                        // Logika error bisa ditambahkan di sini
-                    }
-                }
+                // WebViewClient standar tanpa override kosong yang tidak perlu
+                webViewClient = WebViewClient()
                 
                 settings.apply {
                     javaScriptEnabled = true
                     domStorageEnabled = true
                     loadWithOverviewMode = true
                     useWideViewPort = true
-                    databaseEnabled = true
-                    // Mengizinkan Mixed Content (HTTP di dalam HTTPS jika diperlukan)
-                    mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                    // Menghapus databaseEnabled yang sudah usang (deprecated)
                 }
                 
                 loadUrl("https://www.google.com")
             }
         },
-        update = { 
-            // Kosongkan agar tidak reload terus menerus saat recompose
+        update = {
+            // Blok update dikosongkan agar WebView tidak reload terus-menerus saat recompose
         }
     )
 }
