@@ -104,7 +104,11 @@ fun MainScreen(dataStoreManager: DataStoreManager) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
-    val buildVersion = "v6.6.6"
+    val context = androidx.compose.ui.platform.LocalContext.current
+    
+    // Mengambil versi aplikasi dari BuildConfig atau PackageInfo secara dinamis
+    val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
+    val buildVersion = "v${packageInfo.versionName}"
 
     val isTopLevelDestination = bottomNavItems.any { it.route == currentDestination?.route }
     val isDebugScreen = currentDestination?.route == Screen.Debug.route
