@@ -1,25 +1,26 @@
 package com.at.coba
 
-import android.Manifest
-import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
@@ -31,6 +32,7 @@ import com.at.coba.ui.Screen
 import com.at.coba.ui.bottomNavItems
 import com.at.coba.ui.screens.*
 import com.at.coba.ui.theme.CobaTheme
+import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {
     private lateinit var dataStoreManager: DataStoreManager
@@ -42,26 +44,39 @@ class MainActivity : ComponentActivity() {
         setContent {
             val themeMode by dataStoreManager.themeMode.collectAsState(initial = DataStoreManager.MODE_SYSTEM_DEFAULT)
             val hasUserAgreed by dataStoreManager.hasUserAgreed.collectAsState(initial = null)
+            val hasPermissionsShown by dataStoreManager.hasPermissionsShown.collectAsState(initial = null)
             
+            var showSplash by remember { mutableStateOf(true) }
+
             val darkTheme = when (themeMode) {
                 DataStoreManager.MODE_LIGHT -> false
                 DataStoreManager.MODE_DARK -> true
                 else -> isSystemInDarkTheme()
             }
 
-            // Permintaan Izin Otomatis (Hanya Notifikasi)
-            RequestNotificationPermission()
+            LaunchedEffect(Unit) {
+                delay(2000) // Splash Screen Duration
+                showSplash = false
+            }
 
             CobaTheme(darkTheme = darkTheme) {
                 Surface(color = MaterialTheme.colorScheme.background) {
-                    if (hasUserAgreed == null) {
-                        // Menunggu data dari DataStore
-                    } else if (!hasUserAgreed!!) {
-                        UserAgreementScreen(dataStoreManager) {
-                            // Re-composition akan terjadi setelah dataStore diupdate
+                    when {
+                        showSplash -> {
+                            SplashScreen()
                         }
-                    } else {
-                        MainScreen(dataStoreManager)
+                        hasUserAgreed == null || hasPermissionsShown == null -> {
+                            // Loading State
+                        }
+                        !hasUserAgreed!! -> {
+                            UserAgreementScreen(dataStoreManager) { }
+                        }
+                        !hasPermissionsShown!! -> {
+                            PermissionScreen(dataStoreManager) { }
+                        }
+                        else -> {
+                            MainScreen(dataStoreManager)
+                        }
                     }
                 }
             }
@@ -70,14 +85,15 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun RequestNotificationPermission() {
-    val notificationPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { _ -> }
-
-    LaunchedEffect(Unit) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+fun SplashScreen() {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                text = "COBA APP",
+                style = MaterialTheme.typography.displayMedium,
+                color = MaterialTheme.colorScheme.primary
+            )
+            CircularProgressIndicator(modifier = Modifier.padding(top = 16.dp))
         }
     }
 }
@@ -117,12 +133,8 @@ fun MainScreen(dataStoreManager: DataStoreManager) {
                 actions = {
                     if (!isDebugScreen) {
                         IconButton(onClick = { 
-                            navController.navigate(Screen.Debug.route){
-                                popUpTo(navController.graph.findStartDestination().id) {
-                                    saveState = true
-                                }
+                            navController.navigate(Screen.Debug.route) {
                                 launchSingleTop = true
-                                restoreState = true
                             }
                         }) {
                             Icon(Icons.Default.BugReport, contentDescription = "Debug")

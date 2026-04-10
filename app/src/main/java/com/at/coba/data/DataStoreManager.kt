@@ -17,6 +17,7 @@ class DataStoreManager(private val context: Context) {
     companion object {
         val THEME_MODE_KEY = intPreferencesKey("theme_mode")
         val USER_AGREED_KEY = booleanPreferencesKey("user_agreed")
+        val PERMISSIONS_SHOWN_KEY = booleanPreferencesKey("permissions_shown")
         
         const val MODE_SYSTEM_DEFAULT = 0
         const val MODE_LIGHT = 1
@@ -40,6 +41,16 @@ class DataStoreManager(private val context: Context) {
     suspend fun setUserAgreed(agreed: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[USER_AGREED_KEY] = agreed
+        }
+    }
+
+    val hasPermissionsShown: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[PERMISSIONS_SHOWN_KEY] ?: false
+    }
+
+    suspend fun setPermissionsShown(shown: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[PERMISSIONS_SHOWN_KEY] = shown
         }
     }
 
