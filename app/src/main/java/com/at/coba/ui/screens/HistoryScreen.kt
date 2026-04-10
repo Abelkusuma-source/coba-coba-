@@ -6,11 +6,11 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 
 data class HistoryItem(val id: Int, val pair: String, val status: String, val wallet: String, val amount: String)
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HistoryScreen() {
     var statusFilter by remember { mutableStateOf("All") }
@@ -33,25 +33,77 @@ fun HistoryScreen() {
     }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterDropdown("Status", listOf("All", "won", "lost", "standoff"), statusFilter) { statusFilter = it }
-            FilterDropdown("Pair", listOf("All", "ASIA/X", "USD/USDT"), pairFilter) { pairFilter = it }
+        // Baris pertama filter: Status dan Pair dibagi rata (weight 1f) agar tidak terpotong
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            FilterDropdown(
+                label = "Status",
+                options = listOf("All", "won", "lost", "standoff"),
+                selectedOption = statusFilter,
+                modifier = Modifier.weight(1f) // Memberikan ruang proporsional
+            ) { statusFilter = it }
+
+            FilterDropdown(
+                label = "Pair",
+                options = listOf("All", "ASIA/X", "USD/USDT"),
+                selectedOption = pairFilter,
+                modifier = Modifier.weight(1f) // Memberikan ruang proporsional agar tidak terpotong
+            ) { pairFilter = it }
         }
+        
         Spacer(modifier = Modifier.height(8.dp))
-        FilterDropdown("Wallet", listOf("All", "Real - IDR", "Demo - USD", "Real - USD"), walletFilter, modifier = Modifier.fillMaxWidth()) { walletFilter = it }
+        
+        // Filter Wallet (baris kedua, penuh)
+        FilterDropdown(
+            label = "Wallet",
+            options = listOf("All", "Real - IDR", "Demo - USD", "Real - USD"),
+            selectedOption = walletFilter,
+            modifier = Modifier.fillMaxWidth()
+        ) { walletFilter = it }
         
         Spacer(modifier = Modifier.height(16.dp))
 
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(filteredItems) { item ->
-                Card(modifier = Modifier.fillMaxWidth()) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text(text = "Pair: ${item.pair}", style = MaterialTheme.typography.titleMedium)
-                        Text(text = "Status: ${item.status}")
-                        Text(text = "Wallet: ${item.wallet}")
-                        Text(text = "Amount: ${item.amount}")
-                    }
-                }
+                HistoryCard(item)
+            }
+        }
+    }
+}
+
+@Composable
+fun HistoryCard(item: HistoryItem) {
+    val statusColor = when (item.status.lowercase()) {
+        "won" -> Color(0xFF4CAF50) // Hijau
+        "lost" -> Color(0xFFF44336) // Merah
+        else -> MaterialTheme.colorScheme.onSurfaceVariant // Abu-abu untuk standoff
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(text = item.pair, style = MaterialTheme.typography.titleLarge)
+                Text(
+                    text = item.amount,
+                    style = MaterialTheme.typography.titleLarge,
+                    color = statusColor
+                )
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(text = "Status: ${item.status.uppercase()}", color = statusColor, style = MaterialTheme.typography.labelLarge)
+                Text(text = item.wallet, style = MaterialTheme.typography.bodyMedium)
             }
         }
     }
@@ -59,7 +111,13 @@ fun HistoryScreen() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FilterDropdown(label: String, options: List<String>, selectedOption: String, modifier: Modifier = Modifier, onOptionSelected: (String) -> Unit) {
+fun FilterDropdown(
+    label: String,
+    options: List<String>,
+    selectedOption: String,
+    modifier: Modifier = Modifier,
+    onOptionSelected: (String) -> Unit
+) {
     var expanded by remember { mutableStateOf(false) }
 
     ExposedDropdownMenuBox(
@@ -73,7 +131,10 @@ fun FilterDropdown(label: String, options: List<String>, selectedOption: String,
             readOnly = true,
             label = { Text(label) },
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-            modifier = Modifier.menuAnchor().fillMaxWidth()
+            modifier = Modifier
+                .menuAnchor()
+                .fillMaxWidth(),
+            textStyle = MaterialTheme.typography.bodySmall // Ukuran teks diperkecil sedikit agar muat di kolom kecil
         )
         ExposedDropdownMenu(
             expanded = expanded,
