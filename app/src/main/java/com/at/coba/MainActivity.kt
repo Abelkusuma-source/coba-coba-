@@ -104,11 +104,7 @@ fun MainScreen(dataStoreManager: DataStoreManager) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
-    val context = androidx.compose.ui.platform.LocalContext.current
-    
-    // Mengambil versi aplikasi dari BuildConfig atau PackageInfo secara dinamis
-    val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
-    val buildVersion = "v${packageInfo.versionName}"
+    val buildVersion = "v6.6.6"
 
     val isTopLevelDestination = bottomNavItems.any { it.route == currentDestination?.route }
     val isDebugScreen = currentDestination?.route == Screen.Debug.route
@@ -136,9 +132,16 @@ fun MainScreen(dataStoreManager: DataStoreManager) {
                 },
                 actions = {
                     if (!isDebugScreen) {
-                        IconButton(onClick = { 
+                        IconButton(onClick = {
                             navController.navigate(Screen.Debug.route) {
+                            navController.navigate(Screen.Debug.route) {
+                                popUpTo(navController.graph.findStartDestination().id) {
+                                    saveState = true
+                                }
+                            }
                                 launchSingleTop = true
+                                restoreState = true
+
                             }
                         }) {
                             Icon(Icons.Default.BugReport, contentDescription = "Debug")
