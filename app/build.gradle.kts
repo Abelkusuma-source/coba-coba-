@@ -32,6 +32,8 @@ android {
     }
     buildFeatures {
         compose = true
+        // Mengaktifkan buildConfig agar bisa diakses di kode Kotlin
+        buildConfig = true
     }
 }
 
