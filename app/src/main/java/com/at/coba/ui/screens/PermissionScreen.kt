@@ -4,7 +4,6 @@ import android.Manifest
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.net.Uri
 import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
@@ -27,6 +26,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.core.net.toUri
 import com.at.coba.data.DataStoreManager
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -54,7 +54,6 @@ fun PermissionScreen(dataStoreManager: DataStoreManager, onContinue: () -> Unit)
                     Manifest.permission.POST_NOTIFICATIONS
                 ) == PackageManager.PERMISSION_GRANTED
             } else {
-                // Untuk versi di bawah Android 13, notifikasi biasanya aktif secara default
                 true 
             }
             
@@ -108,7 +107,7 @@ fun PermissionScreen(dataStoreManager: DataStoreManager, onContinue: () -> Unit)
             isGranted = isBatteryIgnored,
             onClick = {
                 val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
-                    data = Uri.parse("package:${context.packageName}")
+                    data = "package:${context.packageName}".toUri()
                 }
                 context.startActivity(intent)
             }
@@ -122,7 +121,7 @@ fun PermissionScreen(dataStoreManager: DataStoreManager, onContinue: () -> Unit)
             isGranted = false,
             onClick = {
                 val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                    data = Uri.parse("package:${context.packageName}")
+                    data = "package:${context.packageName}".toUri()
                 }
                 context.startActivity(intent)
             }
