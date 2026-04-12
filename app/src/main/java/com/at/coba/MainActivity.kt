@@ -20,6 +20,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -55,28 +56,18 @@ class MainActivity : ComponentActivity() {
             }
 
             LaunchedEffect(Unit) {
-                delay(2000) // Splash Screen Duration
+                delay(2000)
                 showSplash = false
             }
 
             CobaTheme(darkTheme = darkTheme) {
                 Surface(color = MaterialTheme.colorScheme.background) {
                     when {
-                        showSplash -> {
-                            SplashScreen()
-                        }
-                        hasUserAgreed == null || hasPermissionsShown == null -> {
-                            // Loading State
-                        }
-                        !hasUserAgreed!! -> {
-                            UserAgreementScreen(dataStoreManager) { }
-                        }
-                        !hasPermissionsShown!! -> {
-                            PermissionScreen(dataStoreManager) { }
-                        }
-                        else -> {
-                            MainScreen(dataStoreManager)
-                        }
+                        showSplash -> SplashScreen()
+                        hasUserAgreed == null || hasPermissionsShown == null -> { /* Loading */ }
+                        !hasUserAgreed!! -> UserAgreementScreen(dataStoreManager) { }
+                        !hasPermissionsShown!! -> PermissionScreen(dataStoreManager) { }
+                        else -> MainScreen(dataStoreManager)
                     }
                 }
             }
@@ -88,11 +79,7 @@ class MainActivity : ComponentActivity() {
 fun SplashScreen() {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                text = "COBA APP",
-                style = MaterialTheme.typography.displayMedium,
-                color = MaterialTheme.colorScheme.primary
-            )
+            Text(text = "COBA APP", style = MaterialTheme.typography.displayMedium, color = MaterialTheme.colorScheme.primary)
             CircularProgressIndicator(modifier = Modifier.padding(top = 16.dp))
         }
     }
@@ -104,11 +91,14 @@ fun MainScreen(dataStoreManager: DataStoreManager) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
-    val context = androidx.compose.ui.platform.LocalContext.current
+    val context = LocalContext.current
     
-    // Mengambil versi secara dinamis dari PackageInfo sebagai alternatif jika BuildConfig bermasalah
-    val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
-    val buildVersion = "v${packageInfo.versionName}"
+    val buildVersion = remember(context) {
+        try {
+            val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
+            "v${packageInfo.versionName}"
+        } catch (e: Exception) { "v1.0.0" }
+    }
 
     val isTopLevelDestination = bottomNavItems.any { it.route == currentDestination?.route }
     val isDebugScreen = currentDestination?.route == Screen.Debug.route
@@ -136,16 +126,10 @@ fun MainScreen(dataStoreManager: DataStoreManager) {
                 },
                 actions = {
                     if (!isDebugScreen) {
-                        IconButton(onClick = {
+                        IconButton(onClick = { 
                             navController.navigate(Screen.Debug.route) {
-                            navController.navigate(Screen.Debug.route) {
-                                popUpTo(navController.graph.findStartDestination().id) {
-                                    saveState = true
-                                }
-                            }
                                 launchSingleTop = true
                                 restoreState = true
-
                             }
                         }) {
                             Icon(Icons.Default.BugReport, contentDescription = "Debug")
