@@ -46,7 +46,7 @@ class MainActivity : ComponentActivity() {
             val themeMode by dataStoreManager.themeMode.collectAsState(initial = DataStoreManager.MODE_SYSTEM_DEFAULT)
             val hasUserAgreed by dataStoreManager.hasUserAgreed.collectAsState(initial = null)
             val hasPermissionsShown by dataStoreManager.hasPermissionsShown.collectAsState(initial = null)
-            
+
             var showSplash by remember { mutableStateOf(true) }
 
             val darkTheme = when (themeMode) {
@@ -92,7 +92,7 @@ fun MainScreen(dataStoreManager: DataStoreManager) {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
     val context = LocalContext.current
-    
+
     val buildVersion = remember(context) {
         try {
             val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
@@ -126,9 +126,16 @@ fun MainScreen(dataStoreManager: DataStoreManager) {
                 },
                 actions = {
                     if (!isDebugScreen) {
-                        IconButton(onClick = { 
+                        // KODE YANG ANDA INGINKAN (SUDAH DIPERBAIKI STRUKTURNYA)
+                        IconButton(onClick = {
                             navController.navigate(Screen.Debug.route) {
+                                // Membersihkan stack sampai ke tujuan awal (Trade)
+                                popUpTo(navController.graph.findStartDestination().id) {
+                                    saveState = true
+                                }
+                                // Menghindari penumpukan halaman yang sama
                                 launchSingleTop = true
+                                // Mengembalikan state jika pernah dibuka sebelumnya
                                 restoreState = true
                             }
                         }) {
