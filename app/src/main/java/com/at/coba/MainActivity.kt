@@ -1,13 +1,14 @@
 package com.at.coba
 
-import android.Manifest
-import android.os.Build
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
+import android.os.PowerManager
+import android.provider.Settings
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
@@ -20,6 +21,7 @@ import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
@@ -48,29 +50,41 @@ class MainActivity : ComponentActivity() {
                 else -> isSystemInDarkTheme()
             }
 
-            // Permintaan Izin Otomatis (Hanya Notifikasi)
-            RequestNotificationPermission()
+            var showBatteryDialog by remember { mutableStateOf(false) }
+
+            LaunchedEffect(Unit) {
+                val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+                if (!powerManager.isIgnoringBatteryOptimizations(packageName)) {
+                    showBatteryDialog = true
+                }
+            }
 
             CobaTheme(darkTheme = darkTheme) {
+                if (showBatteryDialog) {
+                    AlertDialog(
+                        onDismissRequest = { showBatteryDialog = false },
+                        title = { Text("Disable Battery Optimization") },
+                        text = { Text("To ensure the app runs smoothly in the background, please disable battery optimization for Coba.") },
+                        confirmButton = {
+                            Button(onClick = {
+                                val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                                    data = Uri.parse("package:$packageName")
+                                }
+                                startActivity(intent)
+                                showBatteryDialog = false
+                            }) {
+                                Text("Allow")
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { showBatteryDialog = false }) {
+                                Text("Deny")
+                            }
+                        }
+                    )
+                }
                 MainScreen(dataStoreManager)
             }
-        }
-    }
-}
-
-@Composable
-fun RequestNotificationPermission() {
-    // Launcher untuk Izin Notifikasi (Android 13+)
-    val notificationPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { _ -> 
-        // Izin diproses oleh sistem
-    }
-
-    LaunchedEffect(Unit) {
-        // Minta izin notifikasi jika di Android 13 ke atas
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
     }
 }
@@ -81,7 +95,17 @@ fun MainScreen(dataStoreManager: DataStoreManager) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
-    val buildVersion = "v6.6.6"
+    val context = LocalContext.current
+    
+    // Mengambil versi aplikasi secara dinamis untuk menghindari kesalahan manual
+    val buildVersion = remember(context) {
+        try {
+            val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
+            "v${packageInfo.versionName}"
+        } catch (e: Exception) {
+            "v1.0.0"
+        }
+    }
 
     val isTopLevelDestination = bottomNavItems.any { it.route == currentDestination?.route }
     val isDebugScreen = currentDestination?.route == Screen.Debug.route
