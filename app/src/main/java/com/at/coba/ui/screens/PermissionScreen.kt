@@ -3,6 +3,7 @@ package com.at.coba.ui.screens
 import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.PowerManager
@@ -25,6 +26,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import com.at.coba.data.DataStoreManager
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -36,12 +38,27 @@ fun PermissionScreen(dataStoreManager: DataStoreManager, onContinue: () -> Unit)
     
     // Status Izin secara Real-time
     var isBatteryIgnored by remember { mutableStateOf(false) }
+    var isNotificationGranted by remember { mutableStateOf(false) }
     
+    // Cek status secara berkala saat layar aktif
     LaunchedEffect(Unit) {
         while (true) {
+            // 1. Cek Optimasi Baterai
             val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
             isBatteryIgnored = powerManager.isIgnoringBatteryOptimizations(context.packageName)
-            delay(1000)
+            
+            // 2. Cek Izin Notifikasi
+            isNotificationGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.POST_NOTIFICATIONS
+                ) == PackageManager.PERMISSION_GRANTED
+            } else {
+                // Untuk versi di bawah Android 13, notifikasi biasanya aktif secara default
+                true 
+            }
+            
+            delay(1000) // Re-check setiap detik
         }
     }
 
@@ -71,15 +88,17 @@ fun PermissionScreen(dataStoreManager: DataStoreManager, onContinue: () -> Unit)
         Spacer(modifier = Modifier.height(32.dp))
 
         // 1. Notification Permission
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            PermissionItem(
-                title = "Notifications",
-                description = "Get alerts for trades and price updates.",
-                icon = Icons.Default.Notifications,
-                isGranted = false, 
-                onClick = { notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) }
-            )
-        }
+        PermissionItem(
+            title = "Notifications",
+            description = "Get alerts for trades and price updates.",
+            icon = Icons.Default.Notifications,
+            isGranted = isNotificationGranted, 
+            onClick = { 
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                }
+            }
+        )
 
         // 2. Battery Optimization
         PermissionItem(
