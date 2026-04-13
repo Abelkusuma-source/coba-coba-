@@ -1,27 +1,28 @@
 package com.at.coba.ui.screens
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AttachMoney
-import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.PlatformTextStyle
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
 import java.text.SimpleDateFormat
 import java.util.*
 
-// 2. Data History disesuaikan dengan structure data (misal dari server)
+// Data History disesuaikan dengan structure data asli
 data class HistoryItem(
     val id: Int,
     val pair: String,
@@ -71,7 +72,6 @@ fun HistoryScreen() {
         }
         
         Spacer(modifier = Modifier.height(8.dp))
-        
         FilterDropdown("Account", listOf("All", "Real", "Demo"), accountFilter, Modifier.fillMaxWidth()) { accountFilter = it }
         
         Spacer(modifier = Modifier.height(16.dp))
@@ -92,7 +92,6 @@ fun HistoryScreen() {
         }
     }
 
-    // 6. Detail Order menggunakan Bottom Sheet
     if (showBottomSheet && selectedItem != null) {
         ModalBottomSheet(
             onDismissRequest = { 
@@ -115,7 +114,6 @@ fun HistoryCard(item: HistoryItem, onClick: () -> Unit) {
     }
 
     val typeColor = if (item.type == "BUY") Color(0xFF2196F3) else Color(0xFFE91E63)
-    val currencyIcon = if (item.currency == "USD") Icons.Default.AttachMoney else Icons.Default.Payments
     val sdf = SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.getDefault())
     val formattedDate = sdf.format(Date(item.createdAt))
 
@@ -161,20 +159,28 @@ fun HistoryCard(item: HistoryItem, onClick: () -> Unit) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-                    Surface(
-                        color = typeColor, 
-                        shape = MaterialTheme.shapes.extraSmall, 
-                        modifier = Modifier.height(20.dp).width(42.dp)
+                    // 1. Perbaikan Center Vertical Sempurna
+                    Box(
+                        modifier = Modifier
+                            .background(color = typeColor, shape = MaterialTheme.shapes.extraSmall)
+                            .height(18.dp)
+                            .width(38.dp),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Text(
-                                text = item.type, 
-                                color = Color.White, 
-                                fontSize = 10.sp, 
-                                fontWeight = FontWeight.Bold,
-                                textAlign = TextAlign.Center
+                        Text(
+                            text = item.type,
+                            color = Color.White,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center,
+                            style = TextStyle(
+                                platformStyle = PlatformTextStyle(includeFontPadding = false),
+                                lineHeightStyle = LineHeightStyle(
+                                    alignment = LineHeightStyle.Alignment.Center,
+                                    trim = LineHeightStyle.Trim.None
+                                )
                             )
-                        }
+                        )
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
@@ -190,20 +196,12 @@ fun HistoryCard(item: HistoryItem, onClick: () -> Unit) {
                         text = "Amount: ${formatCurrency(item.amount, item.currency)}", 
                         style = MaterialTheme.typography.bodySmall
                     )
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = currencyIcon, 
-                            contentDescription = null, 
-                            modifier = Modifier.size(14.dp), 
-                            tint = statusColor
-                        )
-                        Spacer(modifier = Modifier.width(2.dp))
-                        Text(
-                            text = "${if (item.profit >= 0) "+" else ""}${formatCurrency(item.profit, item.currency)}",
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                            color = statusColor
-                        )
-                    }
+                    // Perbaikan: Menghapus Icon di sini karena formatCurrency sudah ada simbolnya
+                    Text(
+                        text = "${if (item.profit >= 0) "+" else ""}${formatCurrency(item.profit, item.currency)}",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = statusColor
+                    )
                 }
             }
         }
@@ -234,7 +232,36 @@ fun OrderDetailBottomSheetContent(item: HistoryItem) {
         Spacer(modifier = Modifier.height(24.dp))
 
         DetailRow("Pair", item.pair, MaterialTheme.colorScheme.primary)
-        DetailRow("Order Type", item.type, typeColor)
+        
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(text = "Order Type", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
+            Box(
+                modifier = Modifier
+                    .background(color = typeColor, shape = MaterialTheme.shapes.extraSmall)
+                    .height(20.dp)
+                    .width(44.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = item.type,
+                    color = Color.White,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    style = TextStyle(
+                        platformStyle = PlatformTextStyle(includeFontPadding = false),
+                        lineHeightStyle = LineHeightStyle(
+                            alignment = LineHeightStyle.Alignment.Center,
+                            trim = LineHeightStyle.Trim.None
+                        )
+                    )
+                )
+            }
+        }
+
         DetailRow("Status", item.status.uppercase(), statusColor)
         DetailRow("Mode Akun", item.accountMode)
         DetailRow("Tanggal & Waktu", sdf.format(Date(item.createdAt)))
