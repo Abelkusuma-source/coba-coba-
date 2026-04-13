@@ -33,7 +33,6 @@ import com.at.coba.ui.Screen
 import com.at.coba.ui.bottomNavItems
 import com.at.coba.ui.screens.*
 import com.at.coba.ui.theme.CobaTheme
-import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {
     private lateinit var dataStoreManager: DataStoreManager
@@ -47,7 +46,7 @@ class MainActivity : ComponentActivity() {
             val hasUserAgreed by dataStoreManager.hasUserAgreed.collectAsState(initial = null)
             val hasPermissionsShown by dataStoreManager.hasPermissionsShown.collectAsState(initial = null)
 
-            var showSplash by remember { mutableStateOf(true) }
+            val isDataLoaded = hasUserAgreed != null && hasPermissionsShown != null
 
             val darkTheme = when (themeMode) {
                 DataStoreManager.MODE_LIGHT -> false
@@ -55,18 +54,17 @@ class MainActivity : ComponentActivity() {
                 else -> isSystemInDarkTheme()
             }
 
-            LaunchedEffect(Unit) {
-                delay(2000)
-                showSplash = false
-            }
-
             CobaTheme(darkTheme = darkTheme) {
                 Surface(color = MaterialTheme.colorScheme.background) {
                     when {
-                        showSplash -> SplashScreen()
-                        hasUserAgreed == null || hasPermissionsShown == null -> { /* Loading */ }
+                        // Splash Screen murni tanpa delay, muncul hanya saat data sedang dimuat
+                        !isDataLoaded -> SplashScreen()
+                        
+                        // Setelah data dimuat, cek alur persetujuan dan izin
                         !hasUserAgreed!! -> UserAgreementScreen(dataStoreManager) { }
                         !hasPermissionsShown!! -> PermissionScreen(dataStoreManager) { }
+                        
+                        // Masuk ke konten utama
                         else -> MainScreen(dataStoreManager)
                     }
                 }
@@ -79,7 +77,11 @@ class MainActivity : ComponentActivity() {
 fun SplashScreen() {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(text = "COBA APP", style = MaterialTheme.typography.displayMedium, color = MaterialTheme.colorScheme.primary)
+            Text(
+                text = "AT ST", 
+                style = MaterialTheme.typography.displayMedium, 
+                color = MaterialTheme.colorScheme.primary
+            )
             CircularProgressIndicator(modifier = Modifier.padding(top = 16.dp))
         }
     }
@@ -126,16 +128,12 @@ fun MainScreen(dataStoreManager: DataStoreManager) {
                 },
                 actions = {
                     if (!isDebugScreen) {
-                        // KODE YANG ANDA INGINKAN (SUDAH DIPERBAIKI STRUKTURNYA)
                         IconButton(onClick = {
                             navController.navigate(Screen.Debug.route) {
-                                // Membersihkan stack sampai ke tujuan awal (Trade)
                                 popUpTo(navController.graph.findStartDestination().id) {
                                     saveState = true
                                 }
-                                // Menghindari penumpukan halaman yang sama
                                 launchSingleTop = true
-                                // Mengembalikan state jika pernah dibuka sebelumnya
                                 restoreState = true
                             }
                         }) {
