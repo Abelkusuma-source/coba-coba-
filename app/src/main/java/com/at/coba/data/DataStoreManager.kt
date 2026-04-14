@@ -18,19 +18,15 @@ class DataStoreManager(private val context: Context) {
         val THEME_MODE_KEY = intPreferencesKey("theme_mode")
         val USER_AGREED_KEY = booleanPreferencesKey("user_agreed")
         val PERMISSIONS_SHOWN_KEY = booleanPreferencesKey("permissions_shown")
-        
-        const val MODE_SYSTEM_DEFAULT = 0
-        const val MODE_LIGHT = 1
-        const val MODE_DARK = 2
     }
 
-    val themeMode: Flow<Int> = context.dataStore.data.map { preferences ->
-        preferences[THEME_MODE_KEY] ?: MODE_SYSTEM_DEFAULT
+    val themeMode: Flow<ThemeMode> = context.dataStore.data.map { preferences ->
+        ThemeMode.fromStorageValue(preferences[THEME_MODE_KEY] ?: ThemeMode.SYSTEM_DEFAULT.storageValue)
     }
 
-    suspend fun setThemeMode(mode: Int) {
+    suspend fun setThemeMode(mode: ThemeMode) {
         context.dataStore.edit { preferences ->
-            preferences[THEME_MODE_KEY] = mode
+            preferences[THEME_MODE_KEY] = mode.storageValue
         }
     }
 

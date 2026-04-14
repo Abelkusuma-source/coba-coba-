@@ -29,6 +29,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.at.coba.data.DataStoreManager
+import com.at.coba.data.ThemeMode
 import com.at.coba.ui.Screen
 import com.at.coba.ui.bottomNavItems
 import com.at.coba.ui.screens.*
@@ -42,16 +43,16 @@ class MainActivity : ComponentActivity() {
         dataStoreManager = DataStoreManager(this)
         enableEdgeToEdge()
         setContent {
-            val themeMode by dataStoreManager.themeMode.collectAsState(initial = DataStoreManager.MODE_SYSTEM_DEFAULT)
+            val themeMode by dataStoreManager.themeMode.collectAsState(initial = ThemeMode.SYSTEM_DEFAULT)
             val hasUserAgreed by dataStoreManager.hasUserAgreed.collectAsState(initial = null)
             val hasPermissionsShown by dataStoreManager.hasPermissionsShown.collectAsState(initial = null)
 
             val isDataLoaded = hasUserAgreed != null && hasPermissionsShown != null
 
             val darkTheme = when (themeMode) {
-                DataStoreManager.MODE_LIGHT -> false
-                DataStoreManager.MODE_DARK -> true
-                else -> isSystemInDarkTheme()
+                ThemeMode.LIGHT -> false
+                ThemeMode.DARK -> true
+                ThemeMode.SYSTEM_DEFAULT -> isSystemInDarkTheme()
             }
 
             CobaTheme(darkTheme = darkTheme) {

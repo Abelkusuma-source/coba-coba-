@@ -12,22 +12,23 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.at.coba.data.DataStoreManager
+import com.at.coba.data.ThemeMode
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen(dataStoreManager: DataStoreManager) {
-    val themeMode by dataStoreManager.themeMode.collectAsState(initial = DataStoreManager.MODE_SYSTEM_DEFAULT)
+    val themeMode by dataStoreManager.themeMode.collectAsState(initial = ThemeMode.SYSTEM_DEFAULT)
     val scope = rememberCoroutineScope()
     var expanded by remember { mutableStateOf(false) }
 
-    val modes = listOf(
-        Triple(DataStoreManager.MODE_SYSTEM_DEFAULT, "System Default", Icons.Default.BrightnessAuto),
-        Triple(DataStoreManager.MODE_LIGHT, "Light Mode", Icons.Default.LightMode),
-        Triple(DataStoreManager.MODE_DARK, "Dark Mode", Icons.Default.DarkMode)
-    )
-
-    val currentModeInfo = modes.find { it.first == themeMode } ?: modes[0]
+    val currentModeInfo = remember(themeMode) {
+        when (themeMode) {
+            ThemeMode.SYSTEM_DEFAULT -> "System Default" to Icons.Default.BrightnessAuto
+            ThemeMode.LIGHT -> "Light Mode" to Icons.Default.LightMode
+            ThemeMode.DARK -> "Dark Mode" to Icons.Default.DarkMode
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -57,10 +58,10 @@ fun ProfileScreen(dataStoreManager: DataStoreManager) {
                     onExpandedChange = { expanded = !expanded }
                 ) {
                     OutlinedTextField(
-                        value = currentModeInfo.second,
+                        value = currentModeInfo.first,
                         onValueChange = {},
                         readOnly = true,
-                        leadingIcon = { Icon(currentModeInfo.third, contentDescription = null) },
+                        leadingIcon = { Icon(currentModeInfo.second, contentDescription = null) },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
                         modifier = Modifier
                             .menuAnchor(MenuAnchorType.PrimaryNotEditable, true)
@@ -72,7 +73,18 @@ fun ProfileScreen(dataStoreManager: DataStoreManager) {
                         expanded = expanded,
                         onDismissRequest = { expanded = false }
                     ) {
-                        modes.forEach { (mode, label, icon) ->
+                        ThemeMode.entries.forEach { mode ->
+                            val label = when (mode) {
+                                ThemeMode.SYSTEM_DEFAULT -> "System Default"
+                                ThemeMode.LIGHT -> "Light Mode"
+                                ThemeMode.DARK -> "Dark Mode"
+                            }
+                            val icon = when (mode) {
+                                ThemeMode.SYSTEM_DEFAULT -> Icons.Default.BrightnessAuto
+                                ThemeMode.LIGHT -> Icons.Default.LightMode
+                                ThemeMode.DARK -> Icons.Default.DarkMode
+                            }
+
                             DropdownMenuItem(
                                 text = { Text(label) },
                                 leadingIcon = { Icon(icon, contentDescription = null) },
