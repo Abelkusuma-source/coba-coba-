@@ -10,23 +10,24 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import com.at.coba.data.DataStoreManager
+import com.at.coba.R
 import com.at.coba.data.ThemeMode
-import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ProfileScreen(dataStoreManager: DataStoreManager) {
-    val themeMode by dataStoreManager.themeMode.collectAsState(initial = ThemeMode.SYSTEM_DEFAULT)
-    val scope = rememberCoroutineScope()
+fun ProfileScreen(
+    themeMode: ThemeMode,
+    onThemeSelected: (ThemeMode) -> Unit
+) {
     var expanded by remember { mutableStateOf(false) }
 
     val currentModeInfo = remember(themeMode) {
         when (themeMode) {
-            ThemeMode.SYSTEM_DEFAULT -> "System Default" to Icons.Default.BrightnessAuto
-            ThemeMode.LIGHT -> "Light Mode" to Icons.Default.LightMode
-            ThemeMode.DARK -> "Dark Mode" to Icons.Default.DarkMode
+            ThemeMode.SYSTEM_DEFAULT -> R.string.system_default to Icons.Default.BrightnessAuto
+            ThemeMode.LIGHT -> R.string.light_mode to Icons.Default.LightMode
+            ThemeMode.DARK -> R.string.dark_mode to Icons.Default.DarkMode
         }
     }
 
@@ -38,19 +39,28 @@ fun ProfileScreen(dataStoreManager: DataStoreManager) {
     ) {
         Icon(
             imageVector = Icons.Default.Person,
-            contentDescription = null,
+            contentDescription = null, // Dekoratif
             modifier = Modifier.size(100.dp),
             tint = MaterialTheme.colorScheme.primary
         )
-        Text(text = "User Profile", style = MaterialTheme.typography.headlineMedium)
+        Text(
+            text = stringResource(R.string.user_profile),
+            style = MaterialTheme.typography.headlineMedium
+        )
         Spacer(modifier = Modifier.height(32.dp))
 
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text(text = "Personalization", style = MaterialTheme.typography.titleLarge)
+                Text(
+                    text = stringResource(R.string.personalization),
+                    style = MaterialTheme.typography.titleLarge
+                )
                 Spacer(modifier = Modifier.height(16.dp))
                 
-                Text(text = "Theme Selection", style = MaterialTheme.typography.labelLarge)
+                Text(
+                    text = stringResource(R.string.theme_selection),
+                    style = MaterialTheme.typography.labelLarge
+                )
                 Spacer(modifier = Modifier.height(8.dp))
 
                 ExposedDropdownMenuBox(
@@ -58,10 +68,15 @@ fun ProfileScreen(dataStoreManager: DataStoreManager) {
                     onExpandedChange = { expanded = !expanded }
                 ) {
                     OutlinedTextField(
-                        value = currentModeInfo.first,
+                        value = stringResource(currentModeInfo.first),
                         onValueChange = {},
                         readOnly = true,
-                        leadingIcon = { Icon(currentModeInfo.second, contentDescription = null) },
+                        leadingIcon = { 
+                            Icon(
+                                imageVector = currentModeInfo.second, 
+                                contentDescription = null // Sudah ada label teks di sebelahnya
+                            ) 
+                        },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
                         modifier = Modifier
                             .menuAnchor(MenuAnchorType.PrimaryNotEditable, true)
@@ -74,24 +89,22 @@ fun ProfileScreen(dataStoreManager: DataStoreManager) {
                         onDismissRequest = { expanded = false }
                     ) {
                         ThemeMode.entries.forEach { mode ->
-                            val label = when (mode) {
-                                ThemeMode.SYSTEM_DEFAULT -> "System Default"
-                                ThemeMode.LIGHT -> "Light Mode"
-                                ThemeMode.DARK -> "Dark Mode"
+                            val labelRes = when (mode) {
+                                ThemeMode.SYSTEM_DEFAULT -> R.string.system_default
+                                ThemeMode.LIGHT -> R.string.light_mode
+                                ThemeMode.DARK -> R.string.dark_mode
                             }
                             val icon = when (mode) {
                                 ThemeMode.SYSTEM_DEFAULT -> Icons.Default.BrightnessAuto
                                 ThemeMode.LIGHT -> Icons.Default.LightMode
                                 ThemeMode.DARK -> Icons.Default.DarkMode
                             }
-
+                            
                             DropdownMenuItem(
-                                text = { Text(label) },
+                                text = { Text(stringResource(labelRes)) },
                                 leadingIcon = { Icon(icon, contentDescription = null) },
                                 onClick = {
-                                    scope.launch {
-                                        dataStoreManager.setThemeMode(mode)
-                                    }
+                                    onThemeSelected(mode)
                                     expanded = false
                                 }
                             )

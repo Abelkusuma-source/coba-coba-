@@ -71,7 +71,7 @@ fun WebScreen() {
                         useWideViewPort = true
                     }
                     
-                    loadUrl("https://www.google.com")
+                    loadUrl("https://stockity.id/not-found")
                 }
             },
             update = {} // Dikosongkan untuk menghindari reload saat recomposition

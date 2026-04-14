@@ -1,3 +1,19 @@
 <resources>
     <string name="app_name">Coba</string>
+    <string name="user_profile">User Profile</string>
+    <string name="personalization">Personalization</string>
+    <string name="theme_selection">Theme Selection</string>
+    <string name="system_default">System Default</string>
+    <string name="light_mode">Light Mode</string>
+    <string name="dark_mode">Dark Mode</string>
+    <string name="order_details">Order Details</string>
+    <string name="close">Close</string>
+    <string name="pair">Pair</string>
+    <string name="order_type">Order Type</string>
+    <string name="status">Status</string>
+    <string name="account_mode">Account Mode</string>
+    <string name="date_time">Date &amp; Time</string>
+    <string name="total_profit_loss">Total Profit/Loss</string>
+    <string name="back">Back</string>
+    <string name="debug">Debug</string>
 </resources>

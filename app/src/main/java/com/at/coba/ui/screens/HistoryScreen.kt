@@ -11,6 +11,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -19,10 +20,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.at.coba.R
 import java.text.SimpleDateFormat
 import java.util.*
 
-// Data History disesuaikan dengan structure data asli
+// 2. Data History disesuaikan dengan structure data asli
 data class HistoryItem(
     val id: Int,
     val pair: String,
@@ -67,12 +69,12 @@ fun HistoryScreen() {
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            FilterDropdown("Status", listOf("All", "won", "lost", "tie"), statusFilter, Modifier.weight(1f)) { statusFilter = it }
-            FilterDropdown("Pair", listOf("All", "ASIA/X", "USD/USDT"), pairFilter, Modifier.weight(1f)) { pairFilter = it }
+            FilterDropdown(stringResource(R.string.status), listOf("All", "won", "lost", "tie"), statusFilter, Modifier.weight(1f)) { statusFilter = it }
+            FilterDropdown(stringResource(R.string.pair), listOf("All", "ASIA/X", "USD/USDT"), pairFilter, Modifier.weight(1f)) { pairFilter = it }
         }
         
         Spacer(modifier = Modifier.height(8.dp))
-        FilterDropdown("Account", listOf("All", "Real", "Demo"), accountFilter, Modifier.fillMaxWidth()) { accountFilter = it }
+        FilterDropdown(stringResource(R.string.account_mode), listOf("All", "Real", "Demo"), accountFilter, Modifier.fillMaxWidth()) { accountFilter = it }
         
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -159,7 +161,6 @@ fun HistoryCard(item: HistoryItem, onClick: () -> Unit) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-                    // 1. Perbaikan Center Vertical Sempurna
                     Box(
                         modifier = Modifier
                             .background(color = typeColor, shape = MaterialTheme.shapes.extraSmall)
@@ -168,9 +169,9 @@ fun HistoryCard(item: HistoryItem, onClick: () -> Unit) {
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = item.type,
-                            color = Color.White,
-                            fontSize = 9.sp,
+                            text = item.type, 
+                            color = Color.White, 
+                            fontSize = 9.sp, 
                             fontWeight = FontWeight.Bold,
                             textAlign = TextAlign.Center,
                             style = TextStyle(
@@ -196,7 +197,6 @@ fun HistoryCard(item: HistoryItem, onClick: () -> Unit) {
                         text = "Amount: ${formatCurrency(item.amount, item.currency)}", 
                         style = MaterialTheme.typography.bodySmall
                     )
-                    // Perbaikan: Menghapus Icon di sini karena formatCurrency sudah ada simbolnya
                     Text(
                         text = "${if (item.profit >= 0) "+" else ""}${formatCurrency(item.profit, item.currency)}",
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
@@ -226,19 +226,19 @@ fun OrderDetailBottomSheetContent(item: HistoryItem) {
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
-            text = "Order Details",
+            text = stringResource(R.string.order_details),
             style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold)
         )
         Spacer(modifier = Modifier.height(24.dp))
 
-        DetailRow("Pair", item.pair, MaterialTheme.colorScheme.primary)
+        DetailRow(stringResource(R.string.pair), item.pair, MaterialTheme.colorScheme.primary)
         
         Row(
             modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(text = "Order Type", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
+            Text(text = stringResource(R.string.order_type), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
             Box(
                 modifier = Modifier
                     .background(color = typeColor, shape = MaterialTheme.shapes.extraSmall)
@@ -247,9 +247,9 @@ fun OrderDetailBottomSheetContent(item: HistoryItem) {
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = item.type,
-                    color = Color.White,
-                    fontSize = 10.sp,
+                    text = item.type, 
+                    color = Color.White, 
+                    fontSize = 10.sp, 
                     fontWeight = FontWeight.Bold,
                     style = TextStyle(
                         platformStyle = PlatformTextStyle(includeFontPadding = false),
@@ -262,16 +262,16 @@ fun OrderDetailBottomSheetContent(item: HistoryItem) {
             }
         }
 
-        DetailRow("Status", item.status.uppercase(), statusColor)
-        DetailRow("Mode Akun", item.accountMode)
-        DetailRow("Tanggal & Waktu", sdf.format(Date(item.createdAt)))
+        DetailRow(stringResource(R.string.status), item.status.uppercase(), statusColor)
+        DetailRow(stringResource(R.string.account_mode), item.accountMode)
+        DetailRow(stringResource(R.string.date_time), sdf.format(Date(item.createdAt)))
 
         Spacer(modifier = Modifier.height(24.dp))
         HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
         Spacer(modifier = Modifier.height(16.dp))
 
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("Total Profit/Loss", style = MaterialTheme.typography.bodyLarge)
+            Text(text = stringResource(R.string.total_profit_loss), style = MaterialTheme.typography.bodyLarge)
             Text(
                 text = "${if (item.profit >= 0) "+" else ""}${formatCurrency(item.profit, item.currency)}",
                 style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),

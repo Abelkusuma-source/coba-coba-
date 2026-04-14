@@ -22,6 +22,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
@@ -43,9 +45,10 @@ class MainActivity : ComponentActivity() {
         dataStoreManager = DataStoreManager(this)
         enableEdgeToEdge()
         setContent {
-            val themeMode by dataStoreManager.themeMode.collectAsState(initial = ThemeMode.SYSTEM_DEFAULT)
-            val hasUserAgreed by dataStoreManager.hasUserAgreed.collectAsState(initial = null)
-            val hasPermissionsShown by dataStoreManager.hasPermissionsShown.collectAsState(initial = null)
+            // Task 1.c: Gunakan collectAsStateWithLifecycle()
+            val themeMode by dataStoreManager.themeMode.collectAsStateWithLifecycle(initialValue = ThemeMode.SYSTEM_DEFAULT)
+            val hasUserAgreed by dataStoreManager.hasUserAgreed.collectAsStateWithLifecycle(initialValue = null)
+            val hasPermissionsShown by dataStoreManager.hasPermissionsShown.collectAsStateWithLifecycle(initialValue = null)
 
             val isDataLoaded = hasUserAgreed != null && hasPermissionsShown != null
 
@@ -58,14 +61,9 @@ class MainActivity : ComponentActivity() {
             CobaTheme(darkTheme = darkTheme) {
                 Surface(color = MaterialTheme.colorScheme.background) {
                     when {
-                        // Splash Screen murni tanpa delay, muncul hanya saat data sedang dimuat
                         !isDataLoaded -> SplashScreen()
-                        
-                        // Setelah data dimuat, cek alur persetujuan dan izin
                         !hasUserAgreed!! -> UserAgreementScreen(dataStoreManager) { }
                         !hasPermissionsShown!! -> PermissionScreen(dataStoreManager) { }
-                        
-                        // Masuk ke konten utama
                         else -> MainScreen(dataStoreManager)
                     }
                 }
@@ -123,7 +121,10 @@ fun MainScreen(dataStoreManager: DataStoreManager) {
                 navigationIcon = {
                     if (!isTopLevelDestination && currentDestination != null) {
                         IconButton(onClick = { navController.navigateUp() }) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack, 
+                                contentDescription = "Back" // Task 1.b
+                            )
                         }
                     }
                 },
@@ -138,7 +139,10 @@ fun MainScreen(dataStoreManager: DataStoreManager) {
                                 restoreState = true
                             }
                         }) {
-                            Icon(Icons.Default.BugReport, contentDescription = "Debug")
+                            Icon(
+                                imageVector = Icons.Default.BugReport, 
+                                contentDescription = "Debug" // Task 1.b
+                            )
                         }
                     }
                 }
@@ -149,7 +153,12 @@ fun MainScreen(dataStoreManager: DataStoreManager) {
                 bottomNavItems.forEach { screen ->
                     val selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true
                     NavigationBarItem(
-                        icon = { Icon(screen.icon, contentDescription = null) },
+                        icon = { 
+                            Icon(
+                                imageVector = screen.icon, 
+                                contentDescription = screen.title // Task 1.b
+                            ) 
+                        },
                         label = { Text(screen.title) },
                         selected = selected,
                         onClick = {
@@ -178,7 +187,18 @@ fun MainScreen(dataStoreManager: DataStoreManager) {
             composable(Screen.Trade.route) { TradeScreen() }
             composable(Screen.History.route) { HistoryScreen() }
             composable(Screen.Web.route) { WebScreen() }
-            composable(Screen.Profile.route) { ProfileScreen(dataStoreManager) }
+            composable(Screen.Profile.route) { 
+                // Task 2.d: Hubungkan ViewModel ke UI
+                val profileViewModel: ProfileViewModel = viewModel(
+                    factory = ProfileViewModel.Factory(dataStoreManager)
+                )
+                val currentThemeMode by profileViewModel.themeMode.collectAsStateWithLifecycle()
+                
+                ProfileScreen(
+                    themeMode = currentThemeMode,
+                    onThemeSelected = profileViewModel::onThemeSelected
+                )
+            }
             composable(Screen.Debug.route) { DebugScreen(dataStoreManager) }
         }
     }
