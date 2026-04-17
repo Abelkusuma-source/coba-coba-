@@ -166,10 +166,12 @@ fun MainScreen(dataStoreManager: DataStoreManager) {
                     val selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true
                     NavigationBarItem(
                         icon = { 
-                            Icon(
-                                imageVector = screen.icon, 
-                                contentDescription = screen.title // Task 1.b
-                            ) 
+                            screen.icon?.let {
+                                Icon(
+                                    imageVector = it, 
+                                    contentDescription = screen.title
+                                )
+                            }
                         },
                         label = { Text(screen.title) },
                         selected = selected,
