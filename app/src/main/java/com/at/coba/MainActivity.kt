@@ -47,7 +47,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             // Task 1.c: Gunakan collectAsStateWithLifecycle()
             val themeMode by dataStoreManager.themeMode.collectAsStateWithLifecycle(initialValue = ThemeMode.SYSTEM_DEFAULT)
-            val authToken by dataStoreManager.getAuthToken().collectAsStateWithLifecycle(initialValue = null)
+            val authToken by dataStoreManager.authToken.collectAsStateWithLifecycle(initialValue = null)
             val hasUserAgreed by dataStoreManager.hasUserAgreed.collectAsStateWithLifecycle(initialValue = null)
             val hasPermissionsShown by dataStoreManager.hasPermissionsShown.collectAsStateWithLifecycle(initialValue = null)
 
