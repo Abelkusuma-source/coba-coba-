@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -18,6 +19,8 @@ class DataStoreManager(private val context: Context) {
         val THEME_MODE_KEY = intPreferencesKey("theme_mode")
         val USER_AGREED_KEY = booleanPreferencesKey("user_agreed")
         val PERMISSIONS_SHOWN_KEY = booleanPreferencesKey("permissions_shown")
+        val AUTH_TOKEN_KEY = stringPreferencesKey("auth_token")
+        val IS_2FA_ENABLED_KEY = booleanPreferencesKey("is_2fa_enabled")
     }
 
     val themeMode: Flow<ThemeMode> = context.dataStore.data.map { preferences ->
@@ -47,6 +50,33 @@ class DataStoreManager(private val context: Context) {
     suspend fun setPermissionsShown(shown: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[PERMISSIONS_SHOWN_KEY] = shown
+        }
+    }
+
+    val authToken: Flow<String?> = context.dataStore.data.map { preferences ->
+        preferences[AUTH_TOKEN_KEY]
+    }
+
+    suspend fun saveAuthToken(token: String) {
+        context.dataStore.edit { preferences ->
+            preferences[AUTH_TOKEN_KEY] = token
+        }
+    }
+
+    val is2FAEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[IS_2FA_ENABLED_KEY] ?: false
+    }
+
+    suspend fun set2FAEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[IS_2FA_ENABLED_KEY] = enabled
+        }
+    }
+
+    suspend fun clearAuthData() {
+        context.dataStore.edit { preferences ->
+            preferences.remove(AUTH_TOKEN_KEY)
+            preferences.remove(IS_2FA_ENABLED_KEY)
         }
     }
 
