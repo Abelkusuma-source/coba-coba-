@@ -31,8 +31,8 @@ class LoginViewModel(private val dataStoreManager: DataStoreManager) : ViewModel
                 val response = ApiClient.apiService.login(LoginRequest(email, password))
                 
                 // Simpan data ke DataStore
-                dataStoreManager.saveAuthToken(response.token)
-                dataStoreManager.set2FAEnabled(response.is_2fa_enabled)
+                dataStoreManager.setAuthToken(response.token)
+                dataStoreManager.setIs2FAEnabled(response.is_2fa_enabled)
                 
                 // Cek status user agreement
                 val hasAgreed = dataStoreManager.hasUserAgreed.first()
