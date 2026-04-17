@@ -53,13 +53,9 @@ class DataStoreManager(private val context: Context) {
         }
     }
 
-    val authToken: Flow<String?> = context.dataStore.data.map { preferences ->
-        preferences[AUTH_TOKEN_KEY]
-    }
-
-    suspend fun saveAuthToken(token: String) {
-        context.dataStore.edit { preferences ->
-            preferences[AUTH_TOKEN_KEY] = token
+    fun getAuthToken(): Flow<String?> {
+        return context.dataStore.data.map { preferences ->
+            preferences[AUTH_TOKEN_KEY]
         }
     }
 
@@ -68,6 +64,12 @@ class DataStoreManager(private val context: Context) {
     }
 
     suspend fun set2FAEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[IS_2FA_ENABLED_KEY] = enabled
+        }
+    }
+
+    suspend fun setIs2FAEnabled(enabled: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[IS_2FA_ENABLED_KEY] = enabled
         }
