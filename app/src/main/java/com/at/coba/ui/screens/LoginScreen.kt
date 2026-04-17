@@ -43,7 +43,7 @@ fun LoginScreen(
         verticalArrangement = Arrangement.Center
     ) {
         Text(
-            text = "Welcome Back",
+            text = "Welcome",
             style = MaterialTheme.typography.headlineMedium,
             color = MaterialTheme.colorScheme.primary
         )
@@ -81,13 +81,7 @@ fun LoginScreen(
             enabled = uiState !is LoginUiState.Loading
         )
 
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
-            TextButton(onClick = { /* TODO: Forgot Password */ }) {
-                Text("Forgot Password?")
-            }
-        }
+        Spacer(modifier = Modifier.height(16.dp))
 
         Spacer(modifier = Modifier.height(24.dp))
 

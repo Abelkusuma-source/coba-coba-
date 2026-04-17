@@ -9,7 +9,7 @@ import okhttp3.Response
 class AuthInterceptor(private val dataStoreManager: DataStoreManager) : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
         val deviceId = runBlocking { dataStoreManager.getOrCreateDeviceId() }
-        val authToken = runBlocking { dataStoreManager.getAuthToken().first() }
+        val authToken = runBlocking { dataStoreManager.authToken.first() }
         val cookies = runBlocking { dataStoreManager.cookies.first() }
 
         val requestBuilder = chain.request().newBuilder()
@@ -18,7 +18,7 @@ class AuthInterceptor(private val dataStoreManager: DataStoreManager) : Intercep
         
         // Tambahkan Authorization jika token ada
         if (!authToken.isNullOrEmpty()) {
-            requestBuilder.addHeader("Authorization", "Bearer $authToken")
+            requestBuilder.addHeader("Authorization-Token",authToken)
         }
 
         // Tambahkan Cookie. Jika ada cookie dari server gunakan itu, 
