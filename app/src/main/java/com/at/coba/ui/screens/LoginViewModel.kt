@@ -1,5 +1,6 @@
 package com.at.coba.ui.screens
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -11,6 +12,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import retrofit2.HttpException
 
 sealed class LoginUiState {
     object Idle : LoginUiState()
@@ -24,20 +26,29 @@ class LoginViewModel(private val dataStoreManager: DataStoreManager) : ViewModel
     private val _uiState = MutableStateFlow<LoginUiState>(LoginUiState.Idle)
     val uiState: StateFlow<LoginUiState> = _uiState.asStateFlow()
 
-    fun login(email: String, password: String) {
+    fun login(context: Context, email: String, password: String) {
         viewModelScope.launch {
             _uiState.value = LoginUiState.Loading
             try {
-                val response = ApiClient.apiService.login(LoginRequest(email, password))
+                val apiService = ApiClient.getApiService(context)
+                val response = apiService.login(LoginRequest(email, password))
                 
                 // Simpan data ke DataStore
-                dataStoreManager.setAuthToken(response.token)
-                dataStoreManager.setIs2FAEnabled(response.is_2fa_enabled)
+                dataStoreManager.setAuthToken(response.data.authtoken)
+                dataStoreManager.setIs2FAEnabled(response.data.is_2fa_enabled)
                 
                 // Cek status user agreement
                 val hasAgreed = dataStoreManager.hasUserAgreed.first()
                 
                 _uiState.value = LoginUiState.Success(hasAgreed)
+            } catch (e: HttpException) {
+                val errorBody = e.response()?.errorBody()?.string()
+                val message = if (e.code() == 422) {
+                    "Bot protection detected. Please solve captcha in official app/website."
+                } else {
+                    "Login failed (${e.code()}): ${e.message()}"
+                }
+                _uiState.value = LoginUiState.Error(message)
             } catch (e: Exception) {
                 _uiState.value = LoginUiState.Error(e.message ?: "Login failed. Please try again.")
             }

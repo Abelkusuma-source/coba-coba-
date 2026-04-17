@@ -9,7 +9,9 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import java.util.UUID
 
 val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
 
@@ -21,6 +23,9 @@ class DataStoreManager(private val context: Context) {
         val PERMISSIONS_SHOWN_KEY = booleanPreferencesKey("permissions_shown")
         val AUTH_TOKEN_KEY = stringPreferencesKey("auth_token")
         val IS_2FA_ENABLED_KEY = booleanPreferencesKey("is_2fa_enabled")
+        val DEVICE_ID_KEY = stringPreferencesKey("device_id")
+        val COOKIES_KEY = stringPreferencesKey("cookies")
+        const val DEVICE_TYPE = "web"
     }
 
     val themeMode: Flow<ThemeMode> = context.dataStore.data.map { preferences ->
@@ -59,6 +64,27 @@ class DataStoreManager(private val context: Context) {
         }
     }
 
+    suspend fun getOrCreateDeviceId(): String {
+        val currentId = context.dataStore.data.map { it[DEVICE_ID_KEY] }.first()
+        if (currentId != null) return currentId
+
+        val newId = UUID.randomUUID().toString().replace("-", "")
+        context.dataStore.edit { preferences ->
+            preferences[DEVICE_ID_KEY] = newId
+        }
+        return newId
+    }
+
+    val cookies: Flow<String?> = context.dataStore.data.map { preferences ->
+        preferences[COOKIES_KEY]
+    }
+
+    suspend fun setCookies(cookieString: String) {
+        context.dataStore.edit { preferences ->
+            preferences[COOKIES_KEY] = cookieString
+        }
+    }
+
     suspend fun setAuthToken(token: String) {
         context.dataStore.edit { preferences ->
             preferences[AUTH_TOKEN_KEY] = token
@@ -79,6 +105,7 @@ class DataStoreManager(private val context: Context) {
         context.dataStore.edit { preferences ->
             preferences.remove(AUTH_TOKEN_KEY)
             preferences.remove(IS_2FA_ENABLED_KEY)
+            preferences.remove(COOKIES_KEY)
         }
     }
 
