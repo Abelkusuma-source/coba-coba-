@@ -60,10 +60,8 @@ class DataStoreManager(private val context: Context) {
         }
     }
 
-    fun getAuthToken(): Flow<String?> {
-        return dataStore.data.map { preferences ->
-            preferences[AUTH_TOKEN_KEY]
-        }
+    val authToken: Flow<String?> = dataStore.data.map { preferences ->
+        preferences[AUTH_TOKEN_KEY]
     }
 
     suspend fun getOrCreateDeviceId(): String {
