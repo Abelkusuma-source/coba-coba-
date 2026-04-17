@@ -47,6 +47,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             // Task 1.c: Gunakan collectAsStateWithLifecycle()
             val themeMode by dataStoreManager.themeMode.collectAsStateWithLifecycle(initialValue = ThemeMode.SYSTEM_DEFAULT)
+            val authToken by dataStoreManager.authToken.collectAsStateWithLifecycle(initialValue = null)
             val hasUserAgreed by dataStoreManager.hasUserAgreed.collectAsStateWithLifecycle(initialValue = null)
             val hasPermissionsShown by dataStoreManager.hasPermissionsShown.collectAsStateWithLifecycle(initialValue = null)
 
@@ -62,6 +63,17 @@ class MainActivity : ComponentActivity() {
                 Surface(color = MaterialTheme.colorScheme.background) {
                     when {
                         !isDataLoaded -> SplashScreen()
+                        authToken == null -> {
+                            val loginViewModel: LoginViewModel = viewModel(
+                                factory = LoginViewModel.Factory(dataStoreManager)
+                            )
+                            LoginScreen(
+                                viewModel = loginViewModel,
+                                onLoginSuccess = { agreed ->
+                                    // Navigasi akan dipicu oleh perubahan authToken di state
+                                }
+                            )
+                        }
                         !hasUserAgreed!! -> UserAgreementScreen(dataStoreManager) { }
                         !hasPermissionsShown!! -> PermissionScreen(dataStoreManager) { }
                         else -> MainScreen(dataStoreManager)

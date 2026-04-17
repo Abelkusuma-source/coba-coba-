@@ -9,7 +9,10 @@ import androidx.compose.material.icons.filled.ShowChart
 import androidx.compose.material.icons.filled.Web
 import androidx.compose.ui.graphics.vector.ImageVector
 
-sealed class Screen(val route: String, val title: String, val icon: ImageVector) {
+sealed class Screen(val route: String, val title: String, val icon: ImageVector? = null) {
+    object Login : Screen("login", "Login")
+    object UserAgreement : Screen("user_agreement", "User Agreement")
+    object Permissions : Screen("permissions", "Permissions")
     object Trade : Screen("trade", "Trade", Icons.AutoMirrored.Filled.ShowChart)
     object History : Screen("history", "History", Icons.Default.History)
     object Web : Screen("web", "Web", Icons.Default.Web)
