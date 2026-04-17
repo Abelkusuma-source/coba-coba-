@@ -15,11 +15,14 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
+import androidx.compose.ui.platform.LocalContext
+
 @Composable
 fun LoginScreen(
     viewModel: LoginViewModel,
     onLoginSuccess: (Boolean) -> Unit
 ) {
+    val context = LocalContext.current
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
@@ -98,7 +101,7 @@ fun LoginScreen(
         }
 
         Button(
-            onClick = { viewModel.login(email, password) },
+            onClick = { viewModel.login(context, email, password) },
             modifier = Modifier.fillMaxWidth(),
             enabled = email.isNotBlank() && password.isNotBlank() && uiState !is LoginUiState.Loading
         ) {

@@ -9,11 +9,13 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import java.util.UUID
 
 val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
 
-class DataStoreManager(context: Context) {
+class DataStoreManager(private val context: Context) {
 
     private val dataStore = context.applicationContext.dataStore
 
@@ -23,6 +25,9 @@ class DataStoreManager(context: Context) {
         val PERMISSIONS_SHOWN_KEY = booleanPreferencesKey("permissions_shown")
         val AUTH_TOKEN_KEY = stringPreferencesKey("auth_token")
         val IS_2FA_ENABLED_KEY = booleanPreferencesKey("is_2fa_enabled")
+        val DEVICE_ID_KEY = stringPreferencesKey("device_id")
+        val COOKIES_KEY = stringPreferencesKey("cookies")
+        const val DEVICE_TYPE = "web"
     }
 
     val themeMode: Flow<ThemeMode> = dataStore.data.map { preferences ->
@@ -55,11 +60,34 @@ class DataStoreManager(context: Context) {
         }
     }
 
-    val authToken: Flow<String?> = dataStore.data.map { preferences ->
-        preferences[AUTH_TOKEN_KEY]
+    fun getAuthToken(): Flow<String?> {
+        return dataStore.data.map { preferences ->
+            preferences[AUTH_TOKEN_KEY]
+        }
     }
 
-    suspend fun saveAuthToken(token: String) {
+    suspend fun getOrCreateDeviceId(): String {
+        val currentId = dataStore.data.map { it[DEVICE_ID_KEY] }.first()
+        if (currentId != null) return currentId
+
+        val newId = UUID.randomUUID().toString().replace("-", "")
+        dataStore.edit { preferences ->
+            preferences[DEVICE_ID_KEY] = newId
+        }
+        return newId
+    }
+
+    val cookies: Flow<String?> = dataStore.data.map { preferences ->
+        preferences[COOKIES_KEY]
+    }
+
+    suspend fun setCookies(cookieString: String) {
+        dataStore.edit { preferences ->
+            preferences[COOKIES_KEY] = cookieString
+        }
+    }
+
+    suspend fun setAuthToken(token: String) {
         dataStore.edit { preferences ->
             preferences[AUTH_TOKEN_KEY] = token
         }
@@ -69,7 +97,7 @@ class DataStoreManager(context: Context) {
         preferences[IS_2FA_ENABLED_KEY] ?: false
     }
 
-    suspend fun set2FAEnabled(enabled: Boolean) {
+    suspend fun setIs2FAEnabled(enabled: Boolean) {
         dataStore.edit { preferences ->
             preferences[IS_2FA_ENABLED_KEY] = enabled
         }
@@ -79,6 +107,7 @@ class DataStoreManager(context: Context) {
         dataStore.edit { preferences ->
             preferences.remove(AUTH_TOKEN_KEY)
             preferences.remove(IS_2FA_ENABLED_KEY)
+            preferences.remove(COOKIES_KEY)
         }
     }
 
