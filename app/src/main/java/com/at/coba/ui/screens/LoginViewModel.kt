@@ -78,17 +78,28 @@ class LoginViewModel(private val dataStoreManager: DataStoreManager) : ViewModel
         }
     }
 
-    fun verifyOtp(context: Context, otpCode: String) {
+    fun verifyOtp(context: Context) {
         viewModelScope.launch {
             _uiState.value = LoginUiState.Loading
             try {
                 val apiService = ApiClient.getApiService(context)
+
+                // Ambil cookie dari DataStore (COOKIES_KEY)
+                val cookieString = dataStoreManager.cookies.first()
+
+                // Parse nilai 2fa_token dari cookie string
+                val twoFaToken = cookieString
+                    ?.split(";")
+                    ?.firstOrNull { it.trim().startsWith("2fa_token=") }
+                    ?.trim()
+                    ?.removePrefix("2fa_token=")
+                    ?.trim()
                 
                 val response = apiService.login(
                     LoginRequest(
                         email = savedEmail,
                         password = savedPassword,
-                        two_fa_token = otpCode
+                        two_fa_token = twoFaToken
                     )
                 )
 
@@ -100,8 +111,14 @@ class LoginViewModel(private val dataStoreManager: DataStoreManager) : ViewModel
                 val hasAgreed = dataStoreManager.hasUserAgreed.first()
 
                 _uiState.value = LoginUiState.Success(hasAgreed)
+            } catch (e: HttpException) {
+                _uiState.value = LoginUiState.Error(
+                    "Invalid code. Please check the app and try again"
+                )
             } catch (e: Exception) {
-                _uiState.value = LoginUiState.Error("Invalid code. Please check the app and try again")
+                _uiState.value = LoginUiState.Error(
+                    "Invalid code. Please check the app and try again"
+                )
             }
         }
     }
