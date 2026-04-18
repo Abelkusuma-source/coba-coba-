@@ -35,7 +35,9 @@ class AuthInterceptor(private val dataStoreManager: DataStoreManager) : Intercep
         // Tangkap cookie dari server jika ada (terutama untuk 2FA atau update session)
         val serverCookies = response.headers("Set-Cookie")
         if (serverCookies.isNotEmpty()) {
-            val mergedCookies = serverCookies.joinToString("; ")
+            val mergedCookies = serverCookies
+                .map { it.split(";").first().trim() }
+                .joinToString("; ")
             runBlocking {
                 dataStoreManager.setCookies(mergedCookies)
             }

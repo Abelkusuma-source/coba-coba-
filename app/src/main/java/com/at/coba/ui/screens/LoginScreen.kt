@@ -106,8 +106,15 @@ fun LoginScreen(
         AnimatedVisibility(visible = uiState is LoginUiState.Is2FARequired) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
-                    text = "Kode OTP telah dikirim ke email kamu",
+                    text = "Verifikasi Google Authenticator",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+                Text(
+                    text = "Buka aplikasi Google Authenticator di HP kamu " +
+                           "dan masukkan kode 6 digit yang tertera",
                     style = MaterialTheme.typography.bodyMedium,
+                    textAlign = TextAlign.Center,
                     modifier = Modifier.padding(bottom = 16.dp)
                 )
 
