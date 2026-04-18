@@ -27,6 +27,7 @@ class DataStoreManager(private val context: Context) {
         val IS_2FA_ENABLED_KEY = booleanPreferencesKey("is_2fa_enabled")
         val DEVICE_ID_KEY = stringPreferencesKey("device_id")
         val COOKIES_KEY = stringPreferencesKey("cookies")
+        val TWO_FA_TOKEN_KEY = stringPreferencesKey("two_fa_token")
         const val DEVICE_TYPE = "web"
     }
 
@@ -79,9 +80,19 @@ class DataStoreManager(private val context: Context) {
         preferences[COOKIES_KEY]
     }
 
+    val twoFaToken: Flow<String?> = dataStore.data.map { preferences ->
+        preferences[TWO_FA_TOKEN_KEY]
+    }
+
     suspend fun setCookies(cookieString: String) {
         dataStore.edit { preferences ->
             preferences[COOKIES_KEY] = cookieString
+        }
+    }
+
+    suspend fun setTwoFaToken(token: String) {
+        dataStore.edit { preferences ->
+            preferences[TWO_FA_TOKEN_KEY] = token
         }
     }
 
