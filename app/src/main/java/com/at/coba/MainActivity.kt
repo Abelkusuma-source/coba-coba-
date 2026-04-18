@@ -69,7 +69,7 @@ class MainActivity : ComponentActivity() {
                             )
                             LoginScreen(
                                 viewModel = loginViewModel,
-                                onLoginSuccess = { agreed ->
+                                onLoginSuccess = { _ ->
                                     // Navigasi akan dipicu oleh perubahan authToken di state
                                 }
                             )
@@ -110,7 +110,7 @@ fun MainScreen(dataStoreManager: DataStoreManager) {
         try {
             val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
             "v${packageInfo.versionName}"
-        } catch (e: Exception) { "v1.0.0" }
+        } catch (_: Exception) { "v1.0.0" }
     }
 
     val isTopLevelDestination = bottomNavItems.any { it.route == currentDestination?.route }

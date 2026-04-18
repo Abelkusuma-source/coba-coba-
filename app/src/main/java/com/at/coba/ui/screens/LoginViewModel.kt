@@ -42,9 +42,9 @@ class LoginViewModel(private val dataStoreManager: DataStoreManager) : ViewModel
                 
                 _uiState.value = LoginUiState.Success(hasAgreed)
             } catch (e: HttpException) {
-                val errorBody = e.response()?.errorBody()?.string()
+                e.response()?.errorBody()?.string()
                 val message = if (e.code() == 422) {
-                    "Bot protection detected. Please solve captcha in official app/website."
+                    "Invalid email or password."
                 } else {
                     "Login failed (${e.code()}): ${e.message()}"
                 }
