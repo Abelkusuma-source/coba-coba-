@@ -12,11 +12,13 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import org.json.JSONObject
 import retrofit2.HttpException
 
 sealed class LoginUiState {
     object Idle : LoginUiState()
     object Loading : LoginUiState()
+    object Is2FARequired : LoginUiState()
     data class Success(val userAgreed: Boolean) : LoginUiState()
     data class Error(val message: String) : LoginUiState()
 }
@@ -25,6 +27,9 @@ class LoginViewModel(private val dataStoreManager: DataStoreManager) : ViewModel
 
     private val _uiState = MutableStateFlow<LoginUiState>(LoginUiState.Idle)
     val uiState: StateFlow<LoginUiState> = _uiState.asStateFlow()
+
+    private var savedEmail = ""
+    private var savedPassword = ""
 
     fun login(context: Context, email: String, password: String) {
         viewModelScope.launch {
@@ -42,7 +47,23 @@ class LoginViewModel(private val dataStoreManager: DataStoreManager) : ViewModel
                 
                 _uiState.value = LoginUiState.Success(hasAgreed)
             } catch (e: HttpException) {
-                e.response()?.errorBody()?.string()
+                val errorBody = e.response()?.errorBody()?.string()
+                
+                if (e.code() == 422 && errorBody != null) {
+                    try {
+                        val json = JSONObject(errorBody)
+                        val code = json.optString("code")
+                        if (code == "2fa_required") {
+                            savedEmail = email
+                            savedPassword = password
+                            _uiState.value = LoginUiState.Is2FARequired
+                            return@launch
+                        }
+                    } catch (ex: Exception) {
+                        // JSON parsing failed, proceed to normal error handling
+                    }
+                }
+                
                 val message = if (e.code() == 422) {
                     "Invalid email or password."
                 } else {
@@ -51,6 +72,35 @@ class LoginViewModel(private val dataStoreManager: DataStoreManager) : ViewModel
                 _uiState.value = LoginUiState.Error(message)
             } catch (e: Exception) {
                 _uiState.value = LoginUiState.Error(e.message ?: "Login failed. Please try again.")
+            }
+        }
+    }
+
+    fun verifyOtp(context: Context, otpCode: String) {
+        viewModelScope.launch {
+            _uiState.value = LoginUiState.Loading
+            try {
+                val apiService = ApiClient.getApiService(context)
+                val twoFaToken = dataStoreManager.twoFaToken.first()
+                
+                val response = apiService.login(
+                    LoginRequest(
+                        email = savedEmail,
+                        password = savedPassword,
+                        two_fa_token = twoFaToken
+                    )
+                )
+
+                // Simpan data ke DataStore
+                dataStoreManager.setAuthToken(response.data.authtoken)
+                dataStoreManager.setIs2FAEnabled(response.data.is_2fa_enabled)
+
+                // Cek status user agreement
+                val hasAgreed = dataStoreManager.hasUserAgreed.first()
+
+                _uiState.value = LoginUiState.Success(hasAgreed)
+            } catch (e: Exception) {
+                _uiState.value = LoginUiState.Error("Invalid code. Please check the app and try again")
             }
         }
     }
