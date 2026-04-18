@@ -78,28 +78,18 @@ class LoginViewModel(private val dataStoreManager: DataStoreManager) : ViewModel
         }
     }
 
-    fun verifyOtp(context: Context) {
+    // SESUDAH ✅
+    fun verifyOtp(context: Context, otpCode: String) {
         viewModelScope.launch {
             _uiState.value = LoginUiState.Loading
             try {
                 val apiService = ApiClient.getApiService(context)
 
-                // Ambil cookie dari DataStore (COOKIES_KEY)
-                val cookieString = dataStoreManager.cookies.first()
-
-                // Parse nilai 2fa_token dari cookie string
-                val twoFaToken = cookieString
-                    ?.split(";")
-                    ?.firstOrNull { it.trim().startsWith("2fa_token=") }
-                    ?.trim()
-                    ?.removePrefix("2fa_token=")
-                    ?.trim()
-                
                 val response = apiService.login(
                     LoginRequest(
                         email = savedEmail,
                         password = savedPassword,
-                        two_fa_token = twoFaToken
+                        two_fa_token = otpCode  // ← langsung kirim kode 6 digit
                     )
                 )
 

@@ -155,11 +155,12 @@ fun LoginScreen(
 
                 Spacer(modifier = Modifier.height(24.dp))
 
+                // SESUDAH ✅
                 Button(
-                    onClick = { viewModel.verifyOtp(context) },
+                    onClick = { viewModel.verifyOtp(context, otpValue) },
                     modifier = Modifier.fillMaxWidth(),
                     enabled = otpValue.length == 6 && uiState !is LoginUiState.Loading
-                ) {
+                ){
                     if (uiState is LoginUiState.Loading) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(24.dp),

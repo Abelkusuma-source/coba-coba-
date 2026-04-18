@@ -7,16 +7,12 @@ import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 
+// SESUDAH ✅
 object ApiClient {
     private const val BASE_URL = "https://api.stockity.id"
-    private var apiServiceInstance: ApiService? = null
 
     fun getApiService(context: Context): ApiService {
-        return apiServiceInstance ?: synchronized(this) {
-            apiServiceInstance ?: buildRetrofit(context).create(ApiService::class.java).also {
-                apiServiceInstance = it
-            }
-        }
+        return buildRetrofit(context).create(ApiService::class.java)
     }
 
     private fun buildRetrofit(context: Context): Retrofit {
