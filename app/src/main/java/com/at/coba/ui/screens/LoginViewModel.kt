@@ -52,7 +52,9 @@ class LoginViewModel(private val dataStoreManager: DataStoreManager) : ViewModel
                 if (e.code() == 422 && errorBody != null) {
                     try {
                         val json = JSONObject(errorBody)
-                        val code = json.optString("code")
+                        val errors = json.optJSONArray("errors")
+                        val code = errors?.getJSONObject(0)?.optString("code")
+                        
                         if (code == "2fa_required") {
                             savedEmail = email
                             savedPassword = password
@@ -81,13 +83,12 @@ class LoginViewModel(private val dataStoreManager: DataStoreManager) : ViewModel
             _uiState.value = LoginUiState.Loading
             try {
                 val apiService = ApiClient.getApiService(context)
-                val twoFaToken = dataStoreManager.twoFaToken.first()
                 
                 val response = apiService.login(
                     LoginRequest(
                         email = savedEmail,
                         password = savedPassword,
-                        two_fa_token = twoFaToken
+                        two_fa_token = otpCode
                     )
                 )
 
