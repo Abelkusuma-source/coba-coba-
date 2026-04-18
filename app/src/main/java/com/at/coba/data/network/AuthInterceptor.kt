@@ -11,11 +11,12 @@ class AuthInterceptor(private val dataStoreManager: DataStoreManager) : Intercep
         val deviceId = runBlocking { dataStoreManager.getOrCreateDeviceId() }
         val authToken = runBlocking { dataStoreManager.authToken.first() }
         val cookies = runBlocking { dataStoreManager.cookies.first() }
+        android.util.Log.d("AuthInterceptor", "Cookie yang akan dikirim: $cookies")
 
         val requestBuilder = chain.request().newBuilder()
             .addHeader("Device-Id", deviceId)
             .addHeader("Device-Type", DataStoreManager.DEVICE_TYPE)
-        
+            .addHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36")
         // Tambahkan Authorization jika token ada
         if (!authToken.isNullOrEmpty()) {
             requestBuilder.addHeader("Authorization-Token",authToken)
@@ -32,16 +33,7 @@ class AuthInterceptor(private val dataStoreManager: DataStoreManager) : Intercep
 
         val response = chain.proceed(requestBuilder.build())
 
-        // Tangkap cookie dari server jika ada (terutama untuk 2FA atau update session)
-        val serverCookies = response.headers("Set-Cookie")
-        if (serverCookies.isNotEmpty()) {
-            val mergedCookies = serverCookies
-                .map { it.split(";").first().trim() }
-                .joinToString("; ")
-            runBlocking {
-                dataStoreManager.setCookies(mergedCookies)
-            }
-        }
+
 
         return response
     }

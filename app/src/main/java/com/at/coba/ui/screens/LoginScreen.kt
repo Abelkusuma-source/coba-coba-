@@ -156,7 +156,7 @@ fun LoginScreen(
                 Spacer(modifier = Modifier.height(24.dp))
 
                 Button(
-                    onClick = { viewModel.verifyOtp(context) },
+                    onClick = { viewModel.verifyOtp(context, otpValue) },
                     modifier = Modifier.fillMaxWidth(),
                     enabled = otpValue.length == 6 && uiState !is LoginUiState.Loading
                 ) {
