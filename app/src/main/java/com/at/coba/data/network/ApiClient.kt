@@ -2,6 +2,8 @@ package com.at.coba.data.network
 
 import android.content.Context
 import com.at.coba.data.DataStoreManager
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
 import okhttp3.Cookie
 import okhttp3.CookieJar
 import okhttp3.HttpUrl
@@ -9,8 +11,6 @@ import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.runBlocking
 
 object ApiClient {
     private const val BASE_URL = "https://api.stockity.id"
@@ -24,25 +24,14 @@ object ApiClient {
 
         val cookieJar = object : CookieJar {
             override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
-                android.util.Log.d("CookieJar", "saveFromResponse called with ${cookies.size} cookies")
-                cookies.forEach {
-                    android.util.Log.d("CookieJar", "Cookie: ${it.name}=${it.value}")
-                }
                 val cookieString = cookies.joinToString("; ") { "${it.name}=${it.value}" }
                 if (cookieString.isNotEmpty()) {
-                    android.util.Log.d("CookieJar", "Saving cookies: $cookieString")
-                    runBlocking {
-                        dataStoreManager.setCookies(cookieString)
-                    }
-                    android.util.Log.d("CookieJar", "Cookies saved to DataStore")
+                    runBlocking { dataStoreManager.setCookies(cookieString) }
                 }
             }
 
             override fun loadForRequest(url: HttpUrl): List<Cookie> {
-                val cookieString = runBlocking {
-                    dataStoreManager.cookies.first()
-                }
-                android.util.Log.d("CookieJar", "loadForRequest from DataStore: $cookieString")
+                val cookieString = runBlocking { dataStoreManager.cookies.first() }
                 if (cookieString.isNullOrEmpty()) return emptyList()
                 return cookieString.split("; ").mapNotNull { part ->
                     val pairs = part.split("=", limit = 2)
