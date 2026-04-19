@@ -198,7 +198,12 @@ fun MainScreen(dataStoreManager: DataStoreManager) {
             popEnterTransition = { slideInHorizontally { -it } + fadeIn() },
             popExitTransition = { slideOutHorizontally { it } + fadeOut() }
         ) {
-            composable(Screen.Trade.route) { TradeScreen() }
+            composable(Screen.Trade.route) { 
+                val tradeViewModel: TradeViewModel = viewModel(
+                    factory = TradeViewModel.Factory(dataStoreManager)
+                )
+                TradeScreen(tradeViewModel)
+            }
             composable(Screen.History.route) { HistoryScreen() }
             composable(Screen.Web.route) { WebScreen() }
             composable(Screen.Profile.route) { 

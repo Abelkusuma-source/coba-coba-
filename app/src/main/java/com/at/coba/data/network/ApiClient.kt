@@ -24,11 +24,17 @@ object ApiClient {
 
         val cookieJar = object : CookieJar {
             override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
+                android.util.Log.d("CookieJar", "saveFromResponse called with ${cookies.size} cookies")
+                cookies.forEach {
+                    android.util.Log.d("CookieJar", "Cookie: ${it.name}=${it.value}")
+                }
                 val cookieString = cookies.joinToString("; ") { "${it.name}=${it.value}" }
                 if (cookieString.isNotEmpty()) {
+                    android.util.Log.d("CookieJar", "Saving cookies: $cookieString")
                     runBlocking {
                         dataStoreManager.setCookies(cookieString)
                     }
+                    android.util.Log.d("CookieJar", "Cookies saved to DataStore")
                 }
             }
 
@@ -36,6 +42,7 @@ object ApiClient {
                 val cookieString = runBlocking {
                     dataStoreManager.cookies.first()
                 }
+                android.util.Log.d("CookieJar", "loadForRequest from DataStore: $cookieString")
                 if (cookieString.isNullOrEmpty()) return emptyList()
                 return cookieString.split("; ").mapNotNull { part ->
                     val pairs = part.split("=", limit = 2)
