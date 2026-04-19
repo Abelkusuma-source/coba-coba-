@@ -58,11 +58,6 @@ class WebSocketManager(private val dataStoreManager: DataStoreManager) {
                 val cookies = dataStoreManager.cookies.first()
                 val authToken = dataStoreManager.authToken.first()
 
-                android.util.Log.d("WebSocketManager", "Connecting WS...")
-                android.util.Log.d("WebSocketManager", "deviceId: $deviceId")
-                android.util.Log.d("WebSocketManager", "authToken: $authToken")
-                android.util.Log.d("WebSocketManager", "cookies: $cookies")
-
                 val cookieHeader = buildString {
                     append("device_id=$deviceId; device_type=${DataStoreManager.DEVICE_TYPE}")
                     if (!cookies.isNullOrEmpty()) append("; $cookies")

@@ -67,17 +67,11 @@ class AssetSocketManager(private val dataStoreManager: DataStoreManager) {
                 val deviceId = dataStoreManager.getOrCreateDeviceId()
                 val cookies = dataStoreManager.cookies.first()
                 val authToken = dataStoreManager.authToken.first()
-                
-                android.util.Log.d("AssetSocketManager", "Connecting AS...")
-                android.util.Log.d("AssetSocketManager", "deviceId: $deviceId")
-                android.util.Log.d("AssetSocketManager", "authToken: $authToken")
-                android.util.Log.d("AssetSocketManager", "cookies: $cookies")
-
                 val cookieHeader = buildString {
                     append("device_id=$deviceId; device_type=${DataStoreManager.DEVICE_TYPE}")
                     if (!cookies.isNullOrEmpty()) append("; $cookies")
                 }
-                
+
                 android.util.Log.d("AssetSocketManager", "Final Cookie header: $cookieHeader")
 
                 val requestBuilder = Request.Builder()
