@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.at.coba.data.DataStoreManager
 import com.at.coba.data.network.ApiClient
 import com.at.coba.data.network.LoginRequest
+import com.at.coba.data.network.OtpRequest
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -30,6 +31,7 @@ class LoginViewModel(private val dataStoreManager: DataStoreManager) : ViewModel
 
     private var savedEmail = ""
     private var savedPassword = ""
+    private var savedSessionCookie = ""
 
     fun login(context: Context, email: String, password: String) {
         viewModelScope.launch {
@@ -37,6 +39,8 @@ class LoginViewModel(private val dataStoreManager: DataStoreManager) : ViewModel
             try {
                 // Bersihkan cookie lama sebelum login baru
                 dataStoreManager.setCookies("")
+                dataStoreManager.clearSessionCookie()
+                
                 val apiService = ApiClient.getApiService(context)
                 val response = apiService.login(LoginRequest(email, password))
                 
@@ -60,6 +64,8 @@ class LoginViewModel(private val dataStoreManager: DataStoreManager) : ViewModel
                         if (code == "2fa_required") {
                             savedEmail = email
                             savedPassword = password
+                            // Simpan SESSION cookie yang dikirim server ke memory
+                            savedSessionCookie = dataStoreManager.sessionCookie.first() ?: ""
                             _uiState.value = LoginUiState.Is2FARequired
                             return@launch
                         }
@@ -80,36 +86,42 @@ class LoginViewModel(private val dataStoreManager: DataStoreManager) : ViewModel
         }
     }
 
+    // SESUDAH ✅ — 3 step flow
     fun verifyOtp(context: Context, otpCode: String) {
         viewModelScope.launch {
             _uiState.value = LoginUiState.Loading
             try {
                 val apiService = ApiClient.getApiService(context)
 
+                // STEP 1: Validate OTP → server return 2FA token via response
+                val otpResponse = apiService.validateOtp(OtpRequest(otp = otpCode))
+                val twoFaToken = otpResponse.data?.twoFaToken
+                    ?: throw Exception("Invalid OTP response")
 
-                val response = apiService.login(
+                // STEP 2: Sign in with 2FA token → server return authtoken
+                val loginResponse = apiService.login(
                     LoginRequest(
                         email = savedEmail,
                         password = savedPassword,
-                        two_fa_token = otpCode
+                        two_fa_token = twoFaToken
                     )
                 )
 
-                // Simpan data ke DataStore
-                dataStoreManager.setAuthToken(response.data.authtoken)
-                dataStoreManager.setIs2FAEnabled(response.data.is_2fa_enabled)
+                // STEP 3: Save authtoken & navigate
+                dataStoreManager.setAuthToken(loginResponse.data.authtoken)
+                dataStoreManager.setIs2FAEnabled(loginResponse.data.is_2fa_enabled)
+                dataStoreManager.clearSessionCookie()
 
-                // Cek status user agreement
                 val hasAgreed = dataStoreManager.hasUserAgreed.first()
-
                 _uiState.value = LoginUiState.Success(hasAgreed)
+
             } catch (e: HttpException) {
                 _uiState.value = LoginUiState.Error(
                     "Invalid code. Please check the app and try again"
                 )
             } catch (e: Exception) {
                 _uiState.value = LoginUiState.Error(
-                    "Invalid code. Please check the app and try again"
+                    e.message ?: "Invalid code. Please check the app and try again"
                 )
             }
         }
