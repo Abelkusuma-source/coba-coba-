@@ -11,6 +11,7 @@ class AuthInterceptor(private val dataStoreManager: DataStoreManager) : Intercep
         val deviceId = runBlocking { dataStoreManager.getOrCreateDeviceId() }
         val authToken = runBlocking { dataStoreManager.authToken.first() }
         val cookies = runBlocking { dataStoreManager.cookies.first() }
+        val sessionCookie = runBlocking { dataStoreManager.sessionCookie.first() }
 
         val requestBuilder = chain.request().newBuilder()
             .addHeader("Device-Id", deviceId)
@@ -23,6 +24,8 @@ class AuthInterceptor(private val dataStoreManager: DataStoreManager) : Intercep
 
         val cookieHeader = buildString {
             append("device_id=$deviceId; device_type=${DataStoreManager.DEVICE_TYPE}")
+            if (!authToken.isNullOrEmpty()) append("; authtoken=$authToken")
+            if (!sessionCookie.isNullOrEmpty()) append("; $sessionCookie")
             if (!cookies.isNullOrEmpty()) append("; $cookies")
         }
         requestBuilder.addHeader("Cookie", cookieHeader)

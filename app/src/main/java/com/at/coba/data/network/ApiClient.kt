@@ -24,7 +24,14 @@ object ApiClient {
 
         val cookieJar = object : CookieJar {
             override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
-                val cookieString = cookies.joinToString("; ") { "${it.name}=${it.value}" }
+                val sessionCookie = cookies.firstOrNull { it.name == "SESSION" }
+                val otherCookies = cookies.filter { it.name != "SESSION" }
+
+                if (sessionCookie != null) {
+                    runBlocking { dataStoreManager.setSessionCookie("SESSION=${sessionCookie.value}") }
+                }
+
+                val cookieString = otherCookies.joinToString("; ") { "${it.name}=${it.value}" }
                 if (cookieString.isNotEmpty()) {
                     runBlocking { dataStoreManager.setCookies(cookieString) }
                 }

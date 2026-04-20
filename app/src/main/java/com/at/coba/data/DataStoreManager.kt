@@ -28,6 +28,7 @@ class DataStoreManager(private val context: Context) {
         val DEVICE_ID_KEY = stringPreferencesKey("device_id")
         val COOKIES_KEY = stringPreferencesKey("cookies")
         val TWO_FA_TOKEN_KEY = stringPreferencesKey("two_fa_token")
+        val SESSION_COOKIE_KEY = stringPreferencesKey("session_cookie")
         const val DEVICE_TYPE = "web"
     }
 
@@ -93,6 +94,22 @@ class DataStoreManager(private val context: Context) {
     suspend fun setTwoFaToken(token: String) {
         dataStore.edit { preferences ->
             preferences[TWO_FA_TOKEN_KEY] = token
+        }
+    }
+
+    val sessionCookie: Flow<String?> = dataStore.data.map { preferences ->
+        preferences[SESSION_COOKIE_KEY]
+    }
+
+    suspend fun setSessionCookie(cookie: String) {
+        dataStore.edit { preferences ->
+            preferences[SESSION_COOKIE_KEY] = cookie
+        }
+    }
+
+    suspend fun clearSessionCookie() {
+        dataStore.edit { preferences ->
+            preferences.remove(SESSION_COOKIE_KEY)
         }
     }
 
