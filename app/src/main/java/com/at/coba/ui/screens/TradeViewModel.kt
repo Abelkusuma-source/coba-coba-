@@ -8,13 +8,20 @@ import com.at.coba.data.network.AssetSocketManager
 import com.at.coba.data.network.WebSocketManager
 import com.at.coba.data.network.WebSocketStatus
 import com.at.coba.data.network.AssetTick
-import com.at.coba.data.network.CandleData
+import com.at.coba.data.model.Candle
+import com.at.coba.util.CandleManager
+import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
 
 class TradeViewModel(
     private val webSocketManager: WebSocketManager,
     private val assetSocketManager: AssetSocketManager
 ) : ViewModel() {
+
+    // Tahap 3: Candle Management
+    private val candleManager = CandleManager(100)
+    val candleHistory: StateFlow<List<Candle>> = candleManager.candleFlow
 
     // Status Koneksi
     val wsStatus: StateFlow<WebSocketStatus> = webSocketManager.connectionStatus
@@ -26,7 +33,22 @@ class TradeViewModel(
     // Data dari Asset Socket (AS)
     val asReceivedMessage: StateFlow<String?> = assetSocketManager.receivedMessage
     val tickData: StateFlow<AssetTick?> = assetSocketManager.tickData
-    val candles: StateFlow<List<CandleData>> = assetSocketManager.candles
+
+    init {
+        // Observasi tickData untuk mengupdate candleHistory secara real-time
+        viewModelScope.launch {
+            assetSocketManager.tickData.collect { tick ->
+                tick?.let {
+                    // Di sini kita paksakan timeframeSeconds = 5
+                    candleManager.processTick(
+                        price = it.rate,
+                        serverTime = it.time,
+                        timeframeSeconds = 5
+                    )
+                }
+            }
+        }
+    }
 
     /**
      * Menghubungkan kedua socket sekaligus

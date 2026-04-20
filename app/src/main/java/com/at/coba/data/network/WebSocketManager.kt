@@ -55,33 +55,48 @@ class WebSocketManager(private val dataStoreManager: DataStoreManager) {
         scope.launch {
             try {
                 val deviceId = dataStoreManager.getOrCreateDeviceId()
-                val cookies = dataStoreManager.cookies.first()
                 val authToken = dataStoreManager.authToken.first()
+                val cookies = dataStoreManager.cookies.first() ?: ""
 
-                val cookieHeader = buildString {
-                    append("device_id=$deviceId; device_type=${DataStoreManager.DEVICE_TYPE}")
-                    if (!cookies.isNullOrEmpty()) append("; $cookies")
+                // Redundant/Robust Cookie logic untuk bypass 401
+                val cookieMap = mutableMapOf<String, String>()
+                if (cookies.isNotEmpty()) {
+                    cookies.split(";").forEach {
+                        val parts = it.split("=", limit = 2)
+                        if (parts.size == 2) {
+                            val key = parts[0].trim()
+                            val value = parts[1].trim()
+                            if (key.isNotEmpty()) cookieMap[key] = value
+                        }
+                    }
                 }
-
-                android.util.Log.d("WebSocketManager", "Final Cookie header: $cookieHeader")
-
-                val requestBuilder = Request.Builder()
-                    .url(WS_URL)
-                    .addHeader("Device-Id", deviceId)
-                    .addHeader("Device-Type", DataStoreManager.DEVICE_TYPE)
-                    .addHeader("User-Agent", USER_AGENT)
-                    .addHeader("Cookie", cookieHeader)
-
+                cookieMap["device_id"] = deviceId
+                cookieMap["device_type"] = "web"
                 if (!authToken.isNullOrEmpty()) {
-                    requestBuilder.addHeader("Authorization-Token", authToken)
+                    cookieMap["authtoken"] = authToken
+                    cookieMap["token"] = authToken
                 }
+                val finalCookieHeader = cookieMap.map { "${it.key}=${it.value}" }.joinToString("; ")
+
+                val request = Request.Builder()
+                    .url(WS_URL)
+                    .header("Cookie", finalCookieHeader)
+                    .header("Device-Id", deviceId)
+                    .header("Device-Type", "web")
+                    .header("Origin", "https://stockity.id")
+                    .header("Referer", "https://stockity.id/")
+                    .header("Accept", "*/*")
+                    .header("Accept-Language", "en-US,en;q=0.9,id;q=0.8")
+                    .header("Sec-WebSocket-Protocol", "phoenix")
+                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
+                    .build()
 
                 val client = OkHttpClient.Builder()
                     .connectTimeout(10, TimeUnit.SECONDS)
                     .readTimeout(0, TimeUnit.MILLISECONDS)
                     .build()
 
-                webSocket = client.newWebSocket(requestBuilder.build(), object : WebSocketListener() {
+                webSocket = client.newWebSocket(request, object : WebSocketListener() {
                     override fun onOpen(webSocket: WebSocket, response: Response) {
                         _connectionStatus.value = WebSocketStatus.Connected
                         refCounter = 1

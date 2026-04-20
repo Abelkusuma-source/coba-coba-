@@ -1,5 +1,6 @@
 package com.at.coba.ui.screens
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.*
@@ -13,6 +14,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.at.coba.data.network.WebSocketStatus
+import com.at.coba.ui.components.ProfessionalCandlestickChart
 
 @Composable
 fun TradeScreen(viewModel: TradeViewModel) {
@@ -21,6 +23,7 @@ fun TradeScreen(viewModel: TradeViewModel) {
     val asStatus by viewModel.asStatus.collectAsStateWithLifecycle()
     
     val tickData by viewModel.tickData.collectAsStateWithLifecycle()
+    val candles by viewModel.candleHistory.collectAsStateWithLifecycle()
     
     // Anggap sedang "Running" jika salah satu socket sedang Connecting atau Connected
     val isRunning = wsStatus !is WebSocketStatus.Disconnected || asStatus !is WebSocketStatus.Disconnected
@@ -53,20 +56,30 @@ fun TradeScreen(viewModel: TradeViewModel) {
             }
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
         // Price Display (Real-time from AS)
         if (tickData != null) {
             Text(text = "Z-CRY/IDX Price", style = MaterialTheme.typography.bodyMedium)
             Text(
                 text = String.format("%.2f", tickData?.rate),
-                style = MaterialTheme.typography.displayMedium,
+                style = MaterialTheme.typography.displayLarge,
                 color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.Bold
             )
         }
 
-        Spacer(modifier = Modifier.weight(1f))
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Candlestick Chart - Menggunakan weight(1f) agar fleksibel
+        Box(modifier = Modifier.weight(1f)) {
+            ProfessionalCandlestickChart(
+                candles = candles,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
 
         // Control Button
         Button(
@@ -79,10 +92,11 @@ fun TradeScreen(viewModel: TradeViewModel) {
             },
             modifier = Modifier
                 .fillMaxWidth()
-                .height(56.dp),
+                .height(50.dp),
             colors = ButtonDefaults.buttonColors(
                 containerColor = if (isRunning) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
-            )
+            ),
+            shape = MaterialTheme.shapes.medium
         ) {
             Text(
                 text = if (isRunning) "STOP CONNECTION" else "START CONNECTION",

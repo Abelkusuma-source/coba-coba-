@@ -16,23 +16,76 @@ import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import java.util.concurrent.TimeUnit
 
+// 1. Data Modeling: Membuat data class Candle yang efisien
+data class Candle(
+    val open: Double,
+    val high: Double,
+    val low: Double,
+    val close: Double,
+    val timestamp: Long
+)
+
 data class AssetTick(
     val rate: Double,
     val time: Long
 )
 
-data class CandleData(
-    val open: Double,
-    val high: Double,
-    val low: Double,
-    val close: Double,
-    val time: Long
-)
+// 2. Logic Core: CandleProcessor untuk menghitung OHLC secara real-time
+class CandleProcessor(private val durationMs: Long, private val maxCandles: Int) {
+    private val _candles = MutableStateFlow<List<Candle>>(emptyList())
+    val candles: StateFlow<List<Candle>> = _candles.asStateFlow()
+
+    private var currentCandle: Candle? = null
+    private var candlePeriodStart: Long = 0L
+    private val lock = Any()
+
+    // 5. Thread Safety: Memastikan pemrosesan data aman meskipun data datang sangat cepat
+    fun processTick(rate: Double, time: Long) {
+        synchronized(lock) {
+            if (currentCandle == null || time - candlePeriodStart >= durationMs) {
+                // Selesaikan candle lama jika ada
+                currentCandle?.let { sealCandle(it) }
+                // Mulai candle baru
+                currentCandle = Candle(open = rate, high = rate, low = rate, close = rate, timestamp = time)
+                candlePeriodStart = time
+            } else {
+                // Update candle berjalan (OHLC)
+                currentCandle = currentCandle?.copy(
+                    high = maxOf(currentCandle!!.high, rate),
+                    low = minOf(currentCandle!!.low, rate),
+                    close = rate
+                )
+            }
+        }
+    }
+
+    private fun sealCandle(candle: Candle) {
+        // 3. Memory Management: Implementasi sistem Fixed-Size Queue (Maksimal 100 candle)
+        val currentList = _candles.value.toMutableList()
+        currentList.add(candle)
+        if (currentList.size > maxCandles) {
+            currentList.removeAt(0)
+        }
+        _candles.value = currentList
+    }
+
+    fun reset() {
+        synchronized(lock) {
+            currentCandle = null
+            candlePeriodStart = 0L
+            _candles.value = emptyList()
+        }
+    }
+}
 
 class AssetSocketManager(private val dataStoreManager: DataStoreManager) {
 
     private var webSocket: WebSocket? = null
     private val scope = CoroutineScope(Dispatchers.IO)
+    
+    // 4. State Management: Menggunakan CandleProcessor yang mengekspos StateFlow
+    private val candleProcessor = CandleProcessor(durationMs = 5_000L, maxCandles = 100)
+    val candles: StateFlow<List<Candle>> = candleProcessor.candles
 
     private val _connectionStatus = MutableStateFlow<WebSocketStatus>(WebSocketStatus.Disconnected)
     val connectionStatus: StateFlow<WebSocketStatus> = _connectionStatus.asStateFlow()
@@ -43,17 +96,8 @@ class AssetSocketManager(private val dataStoreManager: DataStoreManager) {
     private val _tickData = MutableStateFlow<AssetTick?>(null)
     val tickData: StateFlow<AssetTick?> = _tickData.asStateFlow()
 
-    private val _candles = MutableStateFlow<List<CandleData>>(emptyList())
-    val candles: StateFlow<List<CandleData>> = _candles.asStateFlow()
-
-    private var currentCandle: CandleData? = null
-    private var candlePeriodStart: Long = 0L
-
     companion object {
         private const val AS_URL = "wss://as.stockity.id/"
-        private const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36"
-        private const val MAX_CANDLES = 100
-        private const val CANDLE_DURATION_MS = 5_000L // 5 seconds per candle
     }
 
     fun connect(context: Context) {
@@ -65,41 +109,55 @@ class AssetSocketManager(private val dataStoreManager: DataStoreManager) {
         scope.launch {
             try {
                 val deviceId = dataStoreManager.getOrCreateDeviceId()
-                val cookies = dataStoreManager.cookies.first()
                 val authToken = dataStoreManager.authToken.first()
-                val cookieHeader = buildString {
-                    append("device_id=$deviceId; device_type=${DataStoreManager.DEVICE_TYPE}")
-                    if (!cookies.isNullOrEmpty()) append("; $cookies")
+                val cookies = dataStoreManager.cookies.first() ?: ""
+
+                // Redundant/Robust Cookie logic untuk bypass 401
+                val cookieMap = mutableMapOf<String, String>()
+                if (cookies.isNotEmpty()) {
+                    cookies.split(";").forEach {
+                        val parts = it.split("=", limit = 2)
+                        if (parts.size == 2) {
+                            val key = parts[0].trim()
+                            val value = parts[1].trim()
+                            if (key.isNotEmpty()) cookieMap[key] = value
+                        }
+                    }
                 }
-
-                android.util.Log.d("AssetSocketManager", "Final Cookie header: $cookieHeader")
-
-                val requestBuilder = Request.Builder()
-                    .url(AS_URL)
-                    .addHeader("Device-Id", deviceId)
-                    .addHeader("Device-Type", DataStoreManager.DEVICE_TYPE)
-                    .addHeader("User-Agent", USER_AGENT)
-                    .addHeader("Cookie", cookieHeader)
-
+                cookieMap["device_id"] = deviceId
+                cookieMap["device_type"] = "web"
                 if (!authToken.isNullOrEmpty()) {
-                    requestBuilder.addHeader("Authorization-Token", authToken)
+                    cookieMap["authtoken"] = authToken
+                    cookieMap["token"] = authToken
                 }
+                val finalCookieHeader = cookieMap.map { "${it.key}=${it.value}" }.joinToString("; ")
+
+                val request = Request.Builder()
+                    .url(AS_URL)
+                    .header("Cookie", finalCookieHeader)
+                    .header("Device-Id", deviceId)
+                    .header("Device-Type", "web")
+                    .header("Origin", "https://stockity.id")
+                    .header("Referer", "https://stockity.id/")
+                    .header("Accept", "*/*")
+                    .header("Accept-Language", "en-US,en;q=0.9,id;q=0.8")
+                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
+                    .build()
 
                 val client = OkHttpClient.Builder()
                     .connectTimeout(10, TimeUnit.SECONDS)
                     .readTimeout(0, TimeUnit.MILLISECONDS)
                     .build()
 
-                webSocket = client.newWebSocket(requestBuilder.build(), object : WebSocketListener() {
+                webSocket = client.newWebSocket(request, object : WebSocketListener() {
                     override fun onOpen(webSocket: WebSocket, response: Response) {
                         _connectionStatus.value = WebSocketStatus.Connected
                         sendSubscribeMessages(webSocket)
-                        candlePeriodStart = System.currentTimeMillis()
                     }
 
                     override fun onMessage(webSocket: WebSocket, text: String) {
                         _receivedMessage.value = text
-                        parseAndBuildCandle(text)
+                        parseTick(text)
                     }
 
                     override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
@@ -121,7 +179,7 @@ class AssetSocketManager(private val dataStoreManager: DataStoreManager) {
         webSocket = null
         _connectionStatus.value = WebSocketStatus.Disconnected
         _receivedMessage.value = null
-        currentCandle = null
+        candleProcessor.reset()
     }
 
     private fun sendSubscribeMessages(webSocket: WebSocket) {
@@ -129,47 +187,23 @@ class AssetSocketManager(private val dataStoreManager: DataStoreManager) {
         webSocket.send("""{"action":"subscribe","rics":["Z-CRY/IDX"]}""")
     }
 
-    private fun parseAndBuildCandle(json: String) {
+    private fun parseTick(json: String) {
         try {
             val rateStart = json.indexOf("\"rate\":")
             if (rateStart == -1) return
-
-            val rateValueStart = rateStart + 7
-            val rateValueEnd = json.indexOf(",", rateValueStart).let {
-                if (it == -1) json.indexOf("}", rateValueStart) else it
-            }
-            val rate = json.substring(rateValueStart, rateValueEnd).trim().toDoubleOrNull() ?: return
-
+            val start = rateStart + 7
+            var end = json.indexOf(",", start)
+            if (end == -1) end = json.indexOf("}", start)
+            if (end == -1) return
+            
+            val rate = json.substring(start, end).trim().toDoubleOrNull() ?: return
             val now = System.currentTimeMillis()
-            _tickData.value = AssetTick(rate = rate, time = now)
 
-            val candle = currentCandle
-            if (candle == null) {
-                currentCandle = CandleData(open = rate, high = rate, low = rate, close = rate, time = now)
-                candlePeriodStart = now
-            } else {
-                currentCandle = candle.copy(
-                    high = maxOf(candle.high, rate),
-                    low = minOf(candle.low, rate),
-                    close = rate
-                )
-            }
+            // Update Tick Data (untuk UI harga instan)
+            _tickData.value = AssetTick(rate, now)
 
-            if (now - candlePeriodStart >= CANDLE_DURATION_MS) {
-                sealCandle()
-            }
-        } catch (e: Exception) {
-            // Ignore parsing errors
-        }
-    }
-
-    private fun sealCandle() {
-        val sealed = currentCandle
-        if (sealed != null) {
-            val updatedList = (_candles.value + sealed).takeLast(MAX_CANDLES)
-            _candles.value = updatedList
-        }
-        currentCandle = null
-        candlePeriodStart = System.currentTimeMillis()
+            // Masukkan ke processor candle
+            candleProcessor.processTick(rate, now)
+        } catch (e: Exception) {}
     }
 }
