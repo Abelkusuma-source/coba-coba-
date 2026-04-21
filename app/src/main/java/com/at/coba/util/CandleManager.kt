@@ -14,7 +14,7 @@ class CandleManager(private val maxLimit: Int = 100) {
      * Memproses tick harga baru menjadi candle OHLC
      */
     fun processTick(price: Double, serverTime: Long, timeframeSeconds: Int = 5) {
-        val timeframeMs = timeframeSeconds * 1000L
+        val timeframeMs = timeframeSeconds.toLong() * 1000L
         // Menentukan kapan candle ini dimulai (dibulatkan ke timeframe)
         val candleStartTime = (serverTime / timeframeMs) * timeframeMs
 

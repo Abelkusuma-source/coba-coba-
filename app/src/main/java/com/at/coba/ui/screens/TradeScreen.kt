@@ -1,8 +1,12 @@
 package com.at.coba.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -24,6 +28,10 @@ fun TradeScreen(viewModel: TradeViewModel) {
     
     val tickData by viewModel.tickData.collectAsStateWithLifecycle()
     val candles by viewModel.candleHistory.collectAsStateWithLifecycle()
+    val selectedTF by viewModel.selectedTimeframe.collectAsStateWithLifecycle()
+    val tradeSignal by viewModel.tradeSignal.collectAsStateWithLifecycle(TradeSignal.SCANNING)
+    val indicatorState by viewModel.indicatorState.collectAsStateWithLifecycle(IndicatorState())
+    val rsiValue = indicatorState.rsi
     
     // Anggap sedang "Running" jika salah satu socket sedang Connecting atau Connected
     val isRunning = wsStatus !is WebSocketStatus.Disconnected || asStatus !is WebSocketStatus.Disconnected
@@ -34,11 +42,13 @@ fun TradeScreen(viewModel: TradeViewModel) {
             .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(
-            text = "Trading Terminal",
-            style = MaterialTheme.typography.headlineMedium,
-            modifier = Modifier.padding(bottom = 24.dp)
+        // Timeframe Selector
+        TimeframeSelector(
+            selectedTF = selectedTF,
+            onTFSelected = { viewModel.setTimeframe(it) }
         )
+
+        Spacer(modifier = Modifier.height(16.dp))
 
         // Status Card
         Card(
@@ -60,13 +70,23 @@ fun TradeScreen(viewModel: TradeViewModel) {
 
         // Price Display (Real-time from AS)
         if (tickData != null) {
-            Text(text = "Z-CRY/IDX Price", style = MaterialTheme.typography.bodyMedium)
-            Text(
-                text = String.format("%.2f", tickData?.rate),
-                style = MaterialTheme.typography.displayLarge,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.Bold
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.Bottom
+            ) {
+                Text(
+                    text = "Price: ",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.Gray
+                )
+                Text(
+                    text = String.format("%.2f", tickData?.rate),
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold
+                )
+            }
         }
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -77,6 +97,9 @@ fun TradeScreen(viewModel: TradeViewModel) {
                 candles = candles,
                 modifier = Modifier.fillMaxSize()
             )
+            
+            // Indicator Overlay
+            SignalOverlay(tradeSignal = tradeSignal, rsiValue = rsiValue)
         }
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -105,6 +128,89 @@ fun TradeScreen(viewModel: TradeViewModel) {
         }
         
         Spacer(modifier = Modifier.height(16.dp))
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun TimeframeSelector(selectedTF: Int, onTFSelected: (Int) -> Unit) {
+    val timeframes = listOf(
+        5 to "5s", 15 to "15s", 30 to "30s", 60 to "1m",
+        300 to "5m", 900 to "15m", 1800 to "30m", 3600 to "1h", 10800 to "3h", 86400 to "1d"
+    )
+    var expanded by remember { mutableStateOf(false) }
+    val selectedLabel = timeframes.find { it.first == selectedTF }?.second ?: "Select TF"
+
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = !expanded },
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        OutlinedTextField(
+            value = "Timeframe: $selectedLabel",
+            onValueChange = {},
+            readOnly = true,
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+            colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
+            modifier = Modifier
+                .menuAnchor(type = ExposedDropdownMenuAnchorType.PrimaryNotEditable, enabled = true)
+                .fillMaxWidth(),
+            textStyle = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+            shape = RoundedCornerShape(8.dp)
+        )
+
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            timeframes.forEach { (seconds, label) ->
+                DropdownMenuItem(
+                    text = { Text(label) },
+                    onClick = {
+                        onTFSelected(seconds)
+                        expanded = false
+                    },
+                    contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun BoxScope.SignalOverlay(tradeSignal: TradeSignal, rsiValue: Double) {
+    Row(
+        modifier = Modifier
+            .align(Alignment.TopStart)
+            .padding(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(text = "RSI: ", color = Color.White.copy(alpha = 0.5f), fontSize = 10.sp)
+        Text(
+            text = String.format("%.1f", rsiValue),
+            color = when {
+                rsiValue > 65 -> Color.Red.copy(alpha = 0.6f)
+                rsiValue < 35 -> Color.Green.copy(alpha = 0.6f)
+                else -> Color.Yellow.copy(alpha = 0.6f)
+            },
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Bold
+        )
+        
+        Spacer(modifier = Modifier.width(12.dp))
+        
+        val (signalText, signalColor) = when (tradeSignal) {
+            TradeSignal.BUY -> "BUY" to Color.Green
+            TradeSignal.SELL -> "SELL" to Color.Red
+            TradeSignal.SCANNING -> "SCAN" to Color.White
+        }
+        
+        Text(
+            text = signalText,
+            color = signalColor.copy(alpha = 0.5f),
+            fontWeight = FontWeight.ExtraBold,
+            fontSize = 10.sp
+        )
     }
 }
 
