@@ -30,9 +30,13 @@ fun CandlestickChart(
         val visibleCandles = candles.takeLast(maxVisible)
         
         // 2. Skala Y dinamis berdasarkan candle yang terlihat saja (Auto-Zoom)
-        val maxPrice = visibleCandles.maxOf { it.high }
-        val minPrice = visibleCandles.minOf { it.low }
-        val priceRange = (maxPrice - minPrice).coerceAtLeast(0.00000001)
+        val rawMaxPrice = visibleCandles.maxOf { it.high }
+        val rawMinPrice = visibleCandles.minOf { it.low }
+        val rawPriceRange = (rawMaxPrice - rawMinPrice).coerceAtLeast(0.00000001)
+        
+        // Tambahkan padding 15% di atas (topBound) agar tidak menabrak teks indikator
+        val maxPrice = rawMaxPrice + (rawPriceRange * 0.15)
+        val priceRange = (maxPrice - rawMinPrice).coerceAtLeast(0.00000001)
 
         // 3. Lebar candle tetap (karena dibagi maxVisible yang konstan)
         val candleWidth = canvasWidth / maxVisible

@@ -19,10 +19,17 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
 sealed class TradeSignal {
-    object Neutral : TradeSignal()
-    object Buy : TradeSignal()
-    object Sell : TradeSignal()
+    object BUY : TradeSignal()
+    object SELL : TradeSignal()
+    object SCANNING : TradeSignal()
 }
+
+data class IndicatorState(
+    val rsi: Double = 50.0,
+    val macd: Double = 0.0,
+    val signal: Double = 0.0,
+    val histogram: Double = 0.0
+)
 
 class TradeViewModel(
     private val webSocketManager: WebSocketManager,
@@ -33,13 +40,13 @@ class TradeViewModel(
     private val _selectedTimeframe = MutableStateFlow(5)
     val selectedTimeframe: StateFlow<Int> = _selectedTimeframe.asStateFlow()
 
-    // Sinyal Trading (BUY/SELL/NEUTRAL)
-    private val _tradeSignal = MutableStateFlow<TradeSignal>(TradeSignal.Neutral)
+    // Sinyal Trading (BUY/SELL/SCANNING)
+    private val _tradeSignal = MutableStateFlow<TradeSignal>(TradeSignal.SCANNING)
     val tradeSignal: StateFlow<TradeSignal> = _tradeSignal.asStateFlow()
 
-    // Indikator Teknis untuk UI
-    private val _rsiValue = MutableStateFlow(50.0)
-    val rsiValue: StateFlow<Double> = _rsiValue.asStateFlow()
+    // State Indikator untuk UI
+    private val _indicatorState = MutableStateFlow(IndicatorState())
+    val indicatorState: StateFlow<IndicatorState> = _indicatorState.asStateFlow()
 
     // Tahap 3: Candle Management
     private val candleManager = CandleManager(100)
@@ -77,34 +84,52 @@ class TradeViewModel(
 
     private fun calculateSignals() {
         val candles = candleHistory.value
-        if (candles.size < 15) return // Butuh data cukup untuk RSI(14)
+        if (candles.size < 26) {
+            _tradeSignal.value = TradeSignal.SCANNING
+            return
+        }
 
         // 1. Hitung RSI
         val rsi = IndicatorMath.calculateRSI(candles)
-        _rsiValue.value = rsi
 
         // 2. Hitung MACD
-        val (macd, signal, _) = IndicatorMath.calculateMACD(candles)
+        val (macd, signal, hist) = IndicatorMath.calculateMACD(candles)
+        
+        // Update Indicator State
+        _indicatorState.value = IndicatorState(
+            rsi = rsi,
+            macd = macd,
+            signal = signal,
+            histogram = hist
+        )
 
-        // 3. Logika Sinyal (Contoh Sederhana: RSI Oversold/Overbought + MACD Crossover)
+        // 3. Logika Sinyal Sensitif (RSI 35/65 untuk timeframe rendah)
         when {
-            rsi < 30.0 && macd > signal -> {
-                _tradeSignal.value = TradeSignal.Buy
+            rsi < 35.0 && macd > signal -> {
+                _tradeSignal.value = TradeSignal.BUY
             }
-            rsi > 70.0 && macd < signal -> {
-                _tradeSignal.value = TradeSignal.Sell
+            rsi > 65.0 && macd < signal -> {
+                _tradeSignal.value = TradeSignal.SELL
             }
             else -> {
-                _tradeSignal.value = TradeSignal.Neutral
+                _tradeSignal.value = TradeSignal.SCANNING
             }
         }
     }
 
     fun setTimeframe(seconds: Int) {
-        if (_selectedTimeframe.value != seconds) {
-            _selectedTimeframe.value = seconds
+        changeTimeframe(seconds)
+    }
+
+    fun changeTimeframe(seconds: Int) {
+        // Validasi durasi (5s hingga 86400s/1 hari)
+        val validSeconds = seconds.coerceIn(5, 86400)
+        
+        if (_selectedTimeframe.value != validSeconds) {
+            _selectedTimeframe.value = validSeconds
             candleManager.clear() // Reset chart saat timeframe ganti
-            _tradeSignal.value = TradeSignal.Neutral
+            _tradeSignal.value = TradeSignal.SCANNING
+            _indicatorState.value = IndicatorState()
         }
     }
 
