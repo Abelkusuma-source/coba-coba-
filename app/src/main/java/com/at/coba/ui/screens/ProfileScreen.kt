@@ -11,7 +11,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.Color
+import androidx.compose.material.icons.automirrored.filled.Logout
 import com.at.coba.R
 import com.at.coba.data.ThemeMode
 
@@ -19,9 +22,32 @@ import com.at.coba.data.ThemeMode
 @Composable
 fun ProfileScreen(
     themeMode: ThemeMode,
-    onThemeSelected: (ThemeMode) -> Unit
+    onThemeSelected: (ThemeMode) -> Unit,
+    onLogout: () -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
+    var showLogoutDialog by remember { mutableStateOf(false) }
+
+    if (showLogoutDialog) {
+        AlertDialog(
+            onDismissRequest = { showLogoutDialog = false },
+            title = { Text("Konfirmasi Logout") },
+            text = { Text("Apakah Anda yakin ingin keluar dan memutuskan semua koneksi trading?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    onLogout()
+                    showLogoutDialog = false
+                }) {
+                    Text("LOGOUT", color = Color.Red, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showLogoutDialog = false }) {
+                    Text("BATAL")
+                }
+            }
+        )
+    }
 
     val currentModeInfo = remember(themeMode) {
         when (themeMode) {
@@ -112,6 +138,22 @@ fun ProfileScreen(
                     }
                 }
             }
+        }
+
+        Spacer(modifier = Modifier.height(32.dp))
+
+        // Tombol Logout
+        Button(
+            onClick = { showLogoutDialog = true },
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.errorContainer,
+                contentColor = MaterialTheme.colorScheme.onErrorContainer
+            )
+        ) {
+            Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null)
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("LOGOUT DARI AKUN")
         }
     }
 }

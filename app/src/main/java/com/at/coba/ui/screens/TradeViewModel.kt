@@ -33,7 +33,8 @@ data class IndicatorState(
 
 class TradeViewModel(
     private val webSocketManager: WebSocketManager,
-    private val assetSocketManager: AssetSocketManager
+    private val assetSocketManager: AssetSocketManager,
+    private val dataStoreManager: DataStoreManager
 ) : ViewModel() {
 
     // Timeframe aktif (5s, 10s, 15s, 30s, 60s)
@@ -150,6 +151,27 @@ class TradeViewModel(
     }
 
     /**
+     * Melakukan proses logout secara aman
+     */
+    fun performLogout() {
+        viewModelScope.launch {
+            // 1. Stop koneksi socket
+            stopConnection()
+            
+            // 2. Clear data candle
+            candleManager.clear()
+            
+            // 3. Reset state indicators & signals
+            _tradeSignal.value = TradeSignal.SCANNING
+            _indicatorState.value = IndicatorState()
+            
+            // 4. Hapus data autentikasi dari DataStore
+            // (Tetap mempertahankan Device ID sesuai requirement)
+            dataStoreManager.clearAuthData()
+        }
+    }
+
+    /**
      * Otomatis disconnect saat ViewModel dihancurkan
      */
     override fun onCleared() {
@@ -165,7 +187,8 @@ class TradeViewModel(
                 @Suppress("UNCHECKED_CAST")
                 return TradeViewModel(
                     WebSocketManager(dataStoreManager),
-                    AssetSocketManager(dataStoreManager)
+                    AssetSocketManager(dataStoreManager),
+                    dataStoreManager
                 ) as T
             }
             throw IllegalArgumentException("Unknown ViewModel class")

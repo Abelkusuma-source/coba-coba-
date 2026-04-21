@@ -213,9 +213,15 @@ fun MainScreen(dataStoreManager: DataStoreManager) {
                 )
                 val currentThemeMode by profileViewModel.themeMode.collectAsStateWithLifecycle()
                 
+                // Akses TradeViewModel untuk performLogout
+                val tradeViewModel: TradeViewModel = viewModel(
+                    factory = TradeViewModel.Factory(dataStoreManager)
+                )
+                
                 ProfileScreen(
                     themeMode = currentThemeMode,
-                    onThemeSelected = profileViewModel::onThemeSelected
+                    onThemeSelected = profileViewModel::onThemeSelected,
+                    onLogout = { tradeViewModel.performLogout() }
                 )
             }
             composable(Screen.Debug.route) { DebugScreen(dataStoreManager) }

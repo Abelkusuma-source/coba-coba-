@@ -132,8 +132,10 @@ class DataStoreManager(private val context: Context) {
     suspend fun clearAuthData() {
         dataStore.edit { preferences ->
             preferences.remove(AUTH_TOKEN_KEY)
-            preferences.remove(IS_2FA_ENABLED_KEY)
             preferences.remove(COOKIES_KEY)
+            preferences.remove(TWO_FA_TOKEN_KEY)
+            preferences.remove(SESSION_COOKIE_KEY)
+            preferences.remove(IS_2FA_ENABLED_KEY)
         }
     }
 
