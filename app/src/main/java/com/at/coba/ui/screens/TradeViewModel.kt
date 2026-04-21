@@ -10,14 +10,36 @@ import com.at.coba.data.network.WebSocketStatus
 import com.at.coba.data.network.AssetTick
 import com.at.coba.data.model.Candle
 import com.at.coba.util.CandleManager
+import com.at.coba.util.IndicatorMath
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+
+sealed class TradeSignal {
+    object Neutral : TradeSignal()
+    object Buy : TradeSignal()
+    object Sell : TradeSignal()
+}
 
 class TradeViewModel(
     private val webSocketManager: WebSocketManager,
     private val assetSocketManager: AssetSocketManager
 ) : ViewModel() {
+
+    // Timeframe aktif (5s, 10s, 15s, 30s, 60s)
+    private val _selectedTimeframe = MutableStateFlow(5)
+    val selectedTimeframe: StateFlow<Int> = _selectedTimeframe.asStateFlow()
+
+    // Sinyal Trading (BUY/SELL/NEUTRAL)
+    private val _tradeSignal = MutableStateFlow<TradeSignal>(TradeSignal.Neutral)
+    val tradeSignal: StateFlow<TradeSignal> = _tradeSignal.asStateFlow()
+
+    // Indikator Teknis untuk UI
+    private val _rsiValue = MutableStateFlow(50.0)
+    val rsiValue: StateFlow<Double> = _rsiValue.asStateFlow()
 
     // Tahap 3: Candle Management
     private val candleManager = CandleManager(100)
@@ -39,14 +61,50 @@ class TradeViewModel(
         viewModelScope.launch {
             assetSocketManager.tickData.collect { tick ->
                 tick?.let {
-                    // Di sini kita paksakan timeframeSeconds = 5
+                    val currentTF = _selectedTimeframe.value
                     candleManager.processTick(
                         price = it.rate,
                         serverTime = it.time,
-                        timeframeSeconds = 5
+                        timeframeSeconds = currentTF
                     )
+                    
+                    // Hitung Indikator & Sinyal
+                    calculateSignals()
                 }
             }
+        }
+    }
+
+    private fun calculateSignals() {
+        val candles = candleHistory.value
+        if (candles.size < 15) return // Butuh data cukup untuk RSI(14)
+
+        // 1. Hitung RSI
+        val rsi = IndicatorMath.calculateRSI(candles)
+        _rsiValue.value = rsi
+
+        // 2. Hitung MACD
+        val (macd, signal, _) = IndicatorMath.calculateMACD(candles)
+
+        // 3. Logika Sinyal (Contoh Sederhana: RSI Oversold/Overbought + MACD Crossover)
+        when {
+            rsi < 30.0 && macd > signal -> {
+                _tradeSignal.value = TradeSignal.Buy
+            }
+            rsi > 70.0 && macd < signal -> {
+                _tradeSignal.value = TradeSignal.Sell
+            }
+            else -> {
+                _tradeSignal.value = TradeSignal.Neutral
+            }
+        }
+    }
+
+    fun setTimeframe(seconds: Int) {
+        if (_selectedTimeframe.value != seconds) {
+            _selectedTimeframe.value = seconds
+            candleManager.clear() // Reset chart saat timeframe ganti
+            _tradeSignal.value = TradeSignal.Neutral
         }
     }
 
