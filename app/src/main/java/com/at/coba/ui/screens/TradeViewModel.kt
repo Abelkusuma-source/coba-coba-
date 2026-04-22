@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import com.at.coba.data.DataStoreManager
+import com.at.coba.data.TradingConfig
 import com.at.coba.data.network.AssetSocketManager
 import com.at.coba.data.network.WebSocketManager
 import com.at.coba.data.network.WebSocketStatus
@@ -13,9 +14,11 @@ import com.at.coba.util.CandleManager
 import com.at.coba.util.IndicatorMath
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 sealed class TradeSignal {
@@ -48,6 +51,14 @@ class TradeViewModel(
     // State Indikator untuk UI
     private val _indicatorState = MutableStateFlow(IndicatorState())
     val indicatorState: StateFlow<IndicatorState> = _indicatorState.asStateFlow()
+
+    // Trading Configuration (RSI/MACD Periods)
+    val tradingConfig: StateFlow<TradingConfig> = dataStoreManager.tradingConfig
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = TradingConfig()
+        )
 
     // Tahap 3: Candle Management
     private val candleManager = CandleManager(100)
@@ -90,11 +101,18 @@ class TradeViewModel(
             return
         }
 
-        // 1. Hitung RSI
-        val rsi = IndicatorMath.calculateRSI(candles)
+        val config = tradingConfig.value
 
-        // 2. Hitung MACD
-        val (macd, signal, hist) = IndicatorMath.calculateMACD(candles)
+        // 1. Hitung RSI dengan config period
+        val rsi = IndicatorMath.calculateRSI(candles, config.rsiPeriod)
+
+        // 2. Hitung MACD dengan config parameters
+        val (macd, signal, hist) = IndicatorMath.calculateMACD(
+            candles,
+            config.macdFast,
+            config.macdSlow,
+            config.macdSignal
+        )
         
         // Update Indicator State
         _indicatorState.value = IndicatorState(
@@ -129,6 +147,18 @@ class TradeViewModel(
         if (_selectedTimeframe.value != validSeconds) {
             _selectedTimeframe.value = validSeconds
             candleManager.clear() // Reset chart saat timeframe ganti
+            _tradeSignal.value = TradeSignal.SCANNING
+            _indicatorState.value = IndicatorState()
+        }
+    }
+
+    /**
+     * Update trading configuration and refresh indicators
+     */
+    fun updateConfig(newConfig: TradingConfig) {
+        viewModelScope.launch {
+            dataStoreManager.updateTradingConfig(newConfig)
+            candleManager.clear() // Reset data agar indikator menghitung ulang dengan parameter baru
             _tradeSignal.value = TradeSignal.SCANNING
             _indicatorState.value = IndicatorState()
         }

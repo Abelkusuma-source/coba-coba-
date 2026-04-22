@@ -15,6 +15,13 @@ import java.util.UUID
 
 val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
 
+data class TradingConfig(
+    val rsiPeriod: Int = 14,
+    val macdFast: Int = 12,
+    val macdSlow: Int = 26,
+    val macdSignal: Int = 9
+)
+
 class DataStoreManager(private val context: Context) {
 
     private val dataStore = context.applicationContext.dataStore
@@ -29,6 +36,12 @@ class DataStoreManager(private val context: Context) {
         val COOKIES_KEY = stringPreferencesKey("cookies")
         val TWO_FA_TOKEN_KEY = stringPreferencesKey("two_fa_token")
         val SESSION_COOKIE_KEY = stringPreferencesKey("session_cookie")
+        
+        val RSI_PERIOD_KEY = intPreferencesKey("rsi_period")
+        val MACD_FAST_KEY = intPreferencesKey("macd_fast")
+        val MACD_SLOW_KEY = intPreferencesKey("macd_slow")
+        val MACD_SIGNAL_KEY = intPreferencesKey("macd_signal")
+        
         const val DEVICE_TYPE = "web"
     }
 
@@ -121,6 +134,24 @@ class DataStoreManager(private val context: Context) {
 
     val is2FAEnabled: Flow<Boolean> = dataStore.data.map { preferences ->
         preferences[IS_2FA_ENABLED_KEY] ?: false
+    }
+
+    val tradingConfig: Flow<TradingConfig> = dataStore.data.map { preferences ->
+        TradingConfig(
+            rsiPeriod = preferences[RSI_PERIOD_KEY] ?: 14,
+            macdFast = preferences[MACD_FAST_KEY] ?: 12,
+            macdSlow = preferences[MACD_SLOW_KEY] ?: 26,
+            macdSignal = preferences[MACD_SIGNAL_KEY] ?: 9
+        )
+    }
+
+    suspend fun updateTradingConfig(config: TradingConfig) {
+        dataStore.edit { preferences ->
+            preferences[RSI_PERIOD_KEY] = config.rsiPeriod
+            preferences[MACD_FAST_KEY] = config.macdFast
+            preferences[MACD_SLOW_KEY] = config.macdSlow
+            preferences[MACD_SIGNAL_KEY] = config.macdSignal
+        }
     }
 
     suspend fun setIs2FAEnabled(enabled: Boolean) {

@@ -8,6 +8,10 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.foundation.text.KeyboardOptions
+import com.at.coba.data.TradingConfig
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -32,7 +36,10 @@ fun TradeScreen(viewModel: TradeViewModel) {
     val selectedTF by viewModel.selectedTimeframe.collectAsStateWithLifecycle()
     val tradeSignal by viewModel.tradeSignal.collectAsStateWithLifecycle(TradeSignal.SCANNING)
     val indicatorState by viewModel.indicatorState.collectAsStateWithLifecycle(IndicatorState())
+    val tradingConfig by viewModel.tradingConfig.collectAsStateWithLifecycle()
     val rsiValue = indicatorState.rsi
+
+    var showConfigSheet by remember { mutableStateOf(false) }
 
     // Anggap sedang "Running" jika salah satu socket sedang Connecting atau Connected
     val isRunning = wsStatus !is WebSocketStatus.Disconnected || asStatus !is WebSocketStatus.Disconnected
@@ -46,13 +53,30 @@ fun TradeScreen(viewModel: TradeViewModel) {
         // Top Bar
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.Center,
+            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
                 text = "Trading Terminal",
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold
+            )
+            IconButton(onClick = { showConfigSheet = true }) {
+                Icon(
+                    imageVector = Icons.Default.Settings,
+                    contentDescription = "Settings"
+                )
+            }
+        }
+
+        if (showConfigSheet) {
+            TradingConfigSheet(
+                config = tradingConfig,
+                onDismiss = { showConfigSheet = false },
+                onSave = { newConfig ->
+                    viewModel.updateConfig(newConfig)
+                    showConfigSheet = false
+                }
             )
         }
 
@@ -144,6 +168,83 @@ fun TradeScreen(viewModel: TradeViewModel) {
         }
         
         Spacer(modifier = Modifier.height(16.dp))
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun TradingConfigSheet(
+    config: TradingConfig,
+    onDismiss: () -> Unit,
+    onSave: (TradingConfig) -> Unit
+) {
+    var rsiPeriod by remember { mutableStateOf(config.rsiPeriod.toString()) }
+    var macdFast by remember { mutableStateOf(config.macdFast.toString()) }
+    var macdSlow by remember { mutableStateOf(config.macdSlow.toString()) }
+    var macdSignal by remember { mutableStateOf(config.macdSignal.toString()) }
+
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+                .padding(bottom = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Text(
+                text = "Indicator Configuration",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold
+            )
+
+            OutlinedTextField(
+                value = rsiPeriod,
+                onValueChange = { rsiPeriod = it },
+                label = { Text("RSI Period") },
+                modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+            )
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = macdFast,
+                    onValueChange = { macdFast = it },
+                    label = { Text("MACD Fast") },
+                    modifier = Modifier.weight(1f),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                )
+                OutlinedTextField(
+                    value = macdSlow,
+                    onValueChange = { macdSlow = it },
+                    label = { Text("MACD Slow") },
+                    modifier = Modifier.weight(1f),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                )
+            }
+
+            OutlinedTextField(
+                value = macdSignal,
+                onValueChange = { macdSignal = it },
+                label = { Text("MACD Signal Period") },
+                modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+            )
+
+            Button(
+                onClick = {
+                    val newConfig = TradingConfig(
+                        rsiPeriod = rsiPeriod.toIntOrNull() ?: config.rsiPeriod,
+                        macdFast = macdFast.toIntOrNull() ?: config.macdFast,
+                        macdSlow = macdSlow.toIntOrNull() ?: config.macdSlow,
+                        macdSignal = macdSignal.toIntOrNull() ?: config.macdSignal
+                    )
+                    onSave(newConfig)
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("APPLY & RESET CHART")
+            }
+        }
     }
 }
 
