@@ -1,27 +1,29 @@
 package com.at.coba.ui.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.text.KeyboardOptions
-import com.at.coba.data.TradingConfig
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.at.coba.data.TradingConfig
 import com.at.coba.data.network.WebSocketStatus
 import com.at.coba.ui.components.ProfessionalCandlestickChart
 
@@ -41,12 +43,28 @@ fun TradeScreen(viewModel: TradeViewModel) {
 
     var showConfigSheet by remember { mutableStateOf(false) }
 
-    // Anggap sedang "Running" jika salah satu socket sedang Connecting atau Connected
+    // Placeholder states for Asset Pair and Strategy (UI only)
+    var assetPair by remember { mutableStateOf("CRYPTO IDX") }
+    var strategy by remember { mutableStateOf("MACD + RSI") }
+
     val isRunning = wsStatus !is WebSocketStatus.Disconnected || asStatus !is WebSocketStatus.Disconnected
+    val scrollState = rememberScrollState()
+
+    if (showConfigSheet) {
+        TradingConfigSheet(
+            config = tradingConfig,
+            onDismiss = { showConfigSheet = false },
+            onSave = { newConfig ->
+                viewModel.updateConfig(newConfig)
+                showConfigSheet = false
+            }
+        )
+    }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScroll(scrollState)
             .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -69,38 +87,24 @@ fun TradeScreen(viewModel: TradeViewModel) {
             }
         }
 
-        if (showConfigSheet) {
-            TradingConfigSheet(
-                config = tradingConfig,
-                onDismiss = { showConfigSheet = false },
-                onSave = { newConfig ->
-                    viewModel.updateConfig(newConfig)
-                    showConfigSheet = false
-                }
-            )
-        }
-
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Timeframe Selector
-        TimeframeSelector(
-            selectedTF = selectedTF,
-            onTFSelected = { viewModel.setTimeframe(it) }
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Status Card
+        // 1. SYSTEM STATUS card
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(
                 containerColor = MaterialTheme.colorScheme.surfaceVariant
-            )
+            ),
+            shape = RoundedCornerShape(12.dp)
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text(text = "Connection Status", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                Text(
+                    text = "SYSTEM STATUS", 
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
                 Spacer(modifier = Modifier.height(8.dp))
-                
                 StatusRow(label = "Main WebSocket (WS):", status = wsStatus)
                 StatusRow(label = "Asset Socket (AS):", status = asStatus)
             }
@@ -108,31 +112,61 @@ fun TradeScreen(viewModel: TradeViewModel) {
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Price Display (Real-time from AS)
-        if (tickData != null) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.Bottom
-            ) {
-                Text(
-                    text = "Price: ",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Color.Gray
-                )
-                Text(
-                    text = String.format("%.2f", tickData?.rate),
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-        }
+        // 2. TIMEFRAME dropdown
+        LabeledDropdown(
+            label = "TIMEFRAME",
+            options = listOf(
+                5 to "5 Seconds",
+                15 to "15 Seconds",
+                30 to "30 Seconds",
+                60 to "1 Minute",
+                300 to "5 Minutes",
+                900 to "15 Minutes",
+                3600 to "1 Hour"
+            ),
+            selectedValue = selectedTF,
+            onSelect = { viewModel.setTimeframe(it) }
+        )
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
-        // Candlestick Chart - Menggunakan weight(1f) agar fleksibel
-        Box(modifier = Modifier.weight(1f)) {
+        // 3. ASSET PAIR dropdown
+        LabeledDropdown(
+            label = "ASSET PAIR",
+            options = listOf(
+                "CRYPTO IDX" to "CRYPTO IDX",
+                "AUD / USD" to "AUD / USD",
+                "ASIA / X" to "ASIA / X"
+            ),
+            selectedValue = assetPair,
+            onSelect = { assetPair = it }
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // 4. STRATEGY dropdown
+        LabeledDropdown(
+            label = "STRATEGY",
+            options = listOf(
+                "MACD + RSI" to "MACD + RSI",
+                "Bollinger Bands" to "Bollinger Bands",
+                "Price Action" to "Price Action"
+            ),
+            selectedValue = strategy,
+            onSelect = { strategy = it }
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // 5. Chart area
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(300.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(12.dp))
+                .background(MaterialTheme.colorScheme.surface)
+        ) {
             ProfessionalCandlestickChart(
                 candles = candles,
                 modifier = Modifier.fillMaxSize()
@@ -140,34 +174,105 @@ fun TradeScreen(viewModel: TradeViewModel) {
             
             // Indicator Overlay
             SignalOverlay(tradeSignal = tradeSignal, rsiValue = rsiValue)
+
+            // Price Overlay (Real-time)
+            if (tickData != null) {
+                Surface(
+                    color = Color.Black.copy(alpha = 0.6f),
+                    shape = RoundedCornerShape(4.dp),
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(8.dp)
+                ) {
+                    Text(
+                        text = String.format("%.2f", tickData?.rate),
+                        color = Color.Cyan,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                }
+            }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(24.dp))
 
-        // Control Button
+        // 6. START/STOP button
         Button(
             onClick = {
-                if (isRunning) {
-                    viewModel.stopConnection()
-                } else {
-                    viewModel.startConnection(context)
-                }
+                if (isRunning) viewModel.stopConnection()
+                else viewModel.startConnection(context)
             },
             modifier = Modifier
                 .fillMaxWidth()
-                .height(50.dp),
+                .height(56.dp),
             colors = ButtonDefaults.buttonColors(
                 containerColor = if (isRunning) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
             ),
-            shape = MaterialTheme.shapes.medium
+            shape = RoundedCornerShape(12.dp)
         ) {
             Text(
-                text = if (isRunning) "STOP CONNECTION" else "START CONNECTION",
-                fontWeight = FontWeight.Bold
+                text = if (isRunning) "STOP TRADING ENGINE" else "START TRADING ENGINE",
+                fontWeight = FontWeight.ExtraBold,
+                letterSpacing = 1.sp
             )
         }
         
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(32.dp))
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun <T> LabeledDropdown(
+    label: String,
+    options: List<Pair<T, String>>,
+    selectedValue: T,
+    onSelect: (T) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val currentLabel = options.find { it.first == selectedValue }?.second ?: "Select..."
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
+        )
+        ExposedDropdownMenuBox(
+            expanded = expanded,
+            onExpandedChange = { expanded = it }
+        ) {
+            OutlinedTextField(
+                value = currentLabel,
+                onValueChange = {},
+                readOnly = true,
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                modifier = Modifier
+                    .menuAnchor(type = ExposedDropdownMenuAnchorType.PrimaryNotEditable, enabled = true)
+                    .fillMaxWidth(),
+                shape = RoundedCornerShape(8.dp),
+                textStyle = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold)
+            )
+
+            ExposedDropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false }
+            ) {
+                options.forEach { (value, title) ->
+                    DropdownMenuItem(
+                        text = { Text(title) },
+                        onClick = {
+                            onSelect(value)
+                            expanded = false
+                        },
+                        contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -248,52 +353,6 @@ fun TradingConfigSheet(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun TimeframeSelector(selectedTF: Int, onTFSelected: (Int) -> Unit) {
-    val timeframes = listOf(
-        5 to "5s", 15 to "15s", 30 to "30s", 60 to "1m",
-        300 to "5m", 900 to "15m", 1800 to "30m", 3600 to "1h", 10800 to "3h", 86400 to "1d"
-    )
-    var expanded by remember { mutableStateOf(false) }
-    val selectedLabel = timeframes.find { it.first == selectedTF }?.second ?: "Select TF"
-
-    ExposedDropdownMenuBox(
-        expanded = expanded,
-        onExpandedChange = { expanded = !expanded },
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        OutlinedTextField(
-            value = "Timeframe: $selectedLabel",
-            onValueChange = {},
-            readOnly = true,
-            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-            colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
-            modifier = Modifier
-                .menuAnchor(type = ExposedDropdownMenuAnchorType.PrimaryNotEditable, enabled = true)
-                .fillMaxWidth(),
-            textStyle = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-            shape = RoundedCornerShape(8.dp)
-        )
-
-        ExposedDropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false }
-        ) {
-            timeframes.forEach { (seconds, label) ->
-                DropdownMenuItem(
-                    text = { Text(label) },
-                    onClick = {
-                        onTFSelected(seconds)
-                        expanded = false
-                    },
-                    contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding
-                )
-            }
-        }
-    }
-}
-
 @Composable
 fun BoxScope.SignalOverlay(tradeSignal: TradeSignal, rsiValue: Double) {
     Row(
@@ -306,9 +365,9 @@ fun BoxScope.SignalOverlay(tradeSignal: TradeSignal, rsiValue: Double) {
         Text(
             text = String.format("%.1f", rsiValue),
             color = when {
-                rsiValue > 65 -> Color.Red.copy(alpha = 0.6f)
-                rsiValue < 35 -> Color.Green.copy(alpha = 0.6f)
-                else -> Color.Yellow.copy(alpha = 0.6f)
+                rsiValue > 65 -> Color.Red.copy(alpha = 0.8f)
+                rsiValue < 35 -> Color.Green.copy(alpha = 0.8f)
+                else -> Color.Yellow.copy(alpha = 0.8f)
             },
             fontSize = 10.sp,
             fontWeight = FontWeight.Bold
@@ -324,7 +383,7 @@ fun BoxScope.SignalOverlay(tradeSignal: TradeSignal, rsiValue: Double) {
         
         Text(
             text = signalText,
-            color = signalColor.copy(alpha = 0.5f),
+            color = signalColor.copy(alpha = 0.8f),
             fontWeight = FontWeight.ExtraBold,
             fontSize = 10.sp
         )
@@ -346,7 +405,7 @@ fun StatusRow(label: String, status: WebSocketStatus) {
             is WebSocketStatus.Connected -> "Connected" to Color(0xFF4CAF50)
             is WebSocketStatus.Connecting -> "Connecting..." to Color(0xFFFFC107)
             is WebSocketStatus.Disconnected -> "Disconnected" to Color.Gray
-            is WebSocketStatus.Error -> "Error: ${status.message}" to Color.Red
+            is WebSocketStatus.Error -> "Error" to Color.Red
         }
         
         Surface(
