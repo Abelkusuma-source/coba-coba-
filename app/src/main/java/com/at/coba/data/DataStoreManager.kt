@@ -1,6 +1,7 @@
 package com.at.coba.data
 
 import android.content.Context
+import android.net.Uri
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -9,9 +10,12 @@ import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.withContext
+import java.io.File
 import java.util.UUID
 
 val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
@@ -48,6 +52,10 @@ class DataStoreManager(private val context: Context) {
         val BB_PERIOD_KEY = intPreferencesKey("bb_period")
         val BB_STDDEV_KEY = floatPreferencesKey("bb_stddev")
         val TRADING_STRATEGY_KEY = stringPreferencesKey("trading_strategy")
+        val PROFILE_IMAGE_URI_KEY = stringPreferencesKey("profile_image_uri")
+
+        /** Internal file name after copying picker content into app storage. */
+        const val PROFILE_IMAGE_INTERNAL_FILE = "profile_image.jpg"
 
         const val DEVICE_TYPE = "web"
     }
@@ -141,6 +149,48 @@ class DataStoreManager(private val context: Context) {
 
     val is2FAEnabled: Flow<Boolean> = dataStore.data.map { preferences ->
         preferences[IS_2FA_ENABLED_KEY] ?: false
+    }
+
+    val profileImageUri: Flow<String?> = dataStore.data.map { preferences ->
+        preferences[PROFILE_IMAGE_URI_KEY]
+    }
+
+    suspend fun setProfileImageUri(uri: String) {
+        dataStore.edit { preferences ->
+            preferences[PROFILE_IMAGE_URI_KEY] = uri
+        }
+    }
+
+    /**
+     * Copies the user-picked image into app-internal storage and stores a stable file [Uri] string.
+     * Avoids broken [content://] links after process death or provider revocation.
+     */
+    suspend fun persistProfileImageFromPicker(source: Uri?) {
+        if (source == null) {
+            clearPersistedProfileImage()
+            return
+        }
+        try {
+            withContext(Dispatchers.IO) {
+                context.contentResolver.openInputStream(source)?.use { input ->
+                    val dest = File(context.filesDir, PROFILE_IMAGE_INTERNAL_FILE)
+                    dest.outputStream().use { output -> input.copyTo(output) }
+                } ?: throw IllegalStateException("Unable to open image stream")
+            }
+            val persisted = Uri.fromFile(File(context.filesDir, PROFILE_IMAGE_INTERNAL_FILE)).toString()
+            setProfileImageUri(persisted)
+        } catch (_: Exception) {
+            clearPersistedProfileImage()
+        }
+    }
+
+    private suspend fun clearPersistedProfileImage() {
+        withContext(Dispatchers.IO) {
+            File(context.filesDir, PROFILE_IMAGE_INTERNAL_FILE).delete()
+        }
+        dataStore.edit { preferences ->
+            preferences.remove(PROFILE_IMAGE_URI_KEY)
+        }
     }
 
     val tradingConfig: Flow<TradingConfig> = dataStore.data.map { preferences ->

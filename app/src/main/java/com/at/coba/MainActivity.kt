@@ -212,14 +212,17 @@ fun MainScreen(dataStoreManager: DataStoreManager) {
                     factory = ProfileViewModel.Factory(dataStoreManager)
                 )
                 val currentThemeMode by profileViewModel.themeMode.collectAsStateWithLifecycle()
-                
+                val profileImageUri by profileViewModel.profileImageUri.collectAsStateWithLifecycle()
+
                 // Akses TradeViewModel untuk performLogout
                 val tradeViewModel: TradeViewModel = viewModel(
                     factory = TradeViewModel.Factory(dataStoreManager)
                 )
-                
+
                 ProfileScreen(
                     themeMode = currentThemeMode,
+                    profileImageUri = profileImageUri,
+                    onProfileImagePicked = profileViewModel::onImageSelected,
                     onThemeSelected = profileViewModel::onThemeSelected,
                     onLogout = { tradeViewModel.performLogout() }
                 )

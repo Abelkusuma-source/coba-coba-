@@ -1,5 +1,6 @@
 package com.at.coba.ui.screens
 
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -18,6 +19,19 @@ class ProfileViewModel(private val dataStoreManager: DataStoreManager) : ViewMod
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = ThemeMode.SYSTEM_DEFAULT
         )
+
+    val profileImageUri: StateFlow<String?> = dataStoreManager.profileImageUri
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = null
+        )
+
+    fun onImageSelected(uri: Uri?) {
+        viewModelScope.launch {
+            dataStoreManager.persistProfileImageFromPicker(uri)
+        }
+    }
 
     fun onThemeSelected(mode: ThemeMode) {
         viewModelScope.launch {

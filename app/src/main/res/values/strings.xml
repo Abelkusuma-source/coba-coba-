@@ -1,6 +1,8 @@
 <resources>
     <string name="app_name">Coba</string>
     <string name="user_profile">User Profile</string>
+    <string name="profile_photo_content_description">Foto profil</string>
+    <string name="change_profile_photo">Ubah foto profil</string>
     <string name="personalization">Personalization</string>
     <string name="theme_selection">Theme Selection</string>
     <string name="system_default">System Default</string>
