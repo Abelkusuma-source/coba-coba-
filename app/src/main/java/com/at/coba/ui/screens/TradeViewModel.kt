@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import com.at.coba.data.DataStoreManager
 import com.at.coba.data.TradingConfig
+import com.at.coba.data.TradingStrategy
 import com.at.coba.data.network.AssetSocketManager
 import com.at.coba.data.network.WebSocketManager
 import com.at.coba.data.network.WebSocketStatus
@@ -12,6 +13,7 @@ import com.at.coba.data.network.AssetTick
 import com.at.coba.data.model.Candle
 import com.at.coba.util.CandleManager
 import com.at.coba.util.IndicatorMath
+import com.at.coba.util.PriceActionOutcome
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -31,7 +33,11 @@ data class IndicatorState(
     val rsi: Double = 50.0,
     val macd: Double = 0.0,
     val signal: Double = 0.0,
-    val histogram: Double = 0.0
+    val histogram: Double = 0.0,
+    val bbUpper: Double? = null,
+    val bbMiddle: Double? = null,
+    val bbLower: Double? = null,
+    val priceActionNote: String? = null
 )
 
 class TradeViewModel(
@@ -96,43 +102,124 @@ class TradeViewModel(
 
     private fun calculateSignals() {
         val candles = candleHistory.value
-        if (candles.size < 26) {
+        val config = tradingConfig.value
+        when (config.strategy) {
+            TradingStrategy.MACD_RSI -> applyMacdRsiStrategy(candles, config)
+            TradingStrategy.BOLLINGER -> applyBollingerStrategy(candles, config)
+            TradingStrategy.PRICE_ACTION -> applyPriceActionStrategy(candles)
+        }
+    }
+
+    private fun applyMacdRsiStrategy(candles: List<Candle>, config: TradingConfig) {
+        if (candles.size < config.macdSlow) {
             _tradeSignal.value = TradeSignal.SCANNING
             return
         }
 
-        val config = tradingConfig.value
-
-        // 1. Hitung RSI dengan config period
         val rsi = IndicatorMath.calculateRSI(candles, config.rsiPeriod)
-
-        // 2. Hitung MACD dengan config parameters
         val (macd, signal, hist) = IndicatorMath.calculateMACD(
             candles,
             config.macdFast,
             config.macdSlow,
             config.macdSignal
         )
-        
-        // Update Indicator State
+
         _indicatorState.value = IndicatorState(
             rsi = rsi,
             macd = macd,
             signal = signal,
-            histogram = hist
+            histogram = hist,
+            bbUpper = null,
+            bbMiddle = null,
+            bbLower = null,
+            priceActionNote = null
         )
 
-        // 3. Logika Sinyal Sensitif (RSI 35/65 untuk timeframe rendah)
         when {
-            rsi < 35.0 && macd > signal -> {
-                _tradeSignal.value = TradeSignal.BUY
-            }
-            rsi > 65.0 && macd < signal -> {
-                _tradeSignal.value = TradeSignal.SELL
-            }
-            else -> {
-                _tradeSignal.value = TradeSignal.SCANNING
-            }
+            rsi < 35.0 && macd > signal -> _tradeSignal.value = TradeSignal.BUY
+            rsi > 65.0 && macd < signal -> _tradeSignal.value = TradeSignal.SELL
+            else -> _tradeSignal.value = TradeSignal.SCANNING
+        }
+    }
+
+    private fun applyBollingerStrategy(candles: List<Candle>, config: TradingConfig) {
+        val period = config.bbPeriod
+        if (candles.size < period) {
+            _tradeSignal.value = TradeSignal.SCANNING
+            return
+        }
+
+        val bands = IndicatorMath.calculateBollingerBands(
+            candles,
+            period,
+            config.bbStdDevMultiplier.toDouble()
+        ) ?: run {
+            _tradeSignal.value = TradeSignal.SCANNING
+            return
+        }
+
+        val close = candles.last().close
+        val rsi = if (candles.size > config.rsiPeriod) {
+            IndicatorMath.calculateRSI(candles, config.rsiPeriod)
+        } else 50.0
+
+        _indicatorState.value = IndicatorState(
+            rsi = rsi,
+            macd = 0.0,
+            signal = 0.0,
+            histogram = 0.0,
+            bbUpper = bands.upper,
+            bbMiddle = bands.middle,
+            bbLower = bands.lower,
+            priceActionNote = null
+        )
+
+        when {
+            close < bands.lower -> _tradeSignal.value = TradeSignal.BUY
+            close > bands.upper -> _tradeSignal.value = TradeSignal.SELL
+            else -> _tradeSignal.value = TradeSignal.SCANNING
+        }
+    }
+
+    private fun applyPriceActionStrategy(candles: List<Candle>) {
+        if (candles.size < 3) {
+            _tradeSignal.value = TradeSignal.SCANNING
+            return
+        }
+
+        val outcome = IndicatorMath.evaluatePriceAction(candles)
+        val note = when (outcome) {
+            is PriceActionOutcome.Bullish -> outcome.pattern
+            is PriceActionOutcome.Bearish -> outcome.pattern
+            PriceActionOutcome.Neutral -> null
+        }
+
+        _indicatorState.value = IndicatorState(
+            rsi = 50.0,
+            macd = 0.0,
+            signal = 0.0,
+            histogram = 0.0,
+            bbUpper = null,
+            bbMiddle = null,
+            bbLower = null,
+            priceActionNote = note
+        )
+
+        when (outcome) {
+            is PriceActionOutcome.Bullish -> _tradeSignal.value = TradeSignal.BUY
+            is PriceActionOutcome.Bearish -> _tradeSignal.value = TradeSignal.SELL
+            PriceActionOutcome.Neutral -> _tradeSignal.value = TradeSignal.SCANNING
+        }
+    }
+
+    fun setTradingStrategy(strategy: TradingStrategy) {
+        viewModelScope.launch {
+            val current = tradingConfig.value
+            if (current.strategy == strategy) return@launch
+            dataStoreManager.updateTradingConfig(current.copy(strategy = strategy))
+            candleManager.clear()
+            _tradeSignal.value = TradeSignal.SCANNING
+            _indicatorState.value = IndicatorState()
         }
     }
 

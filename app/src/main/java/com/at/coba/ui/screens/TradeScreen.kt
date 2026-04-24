@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.at.coba.data.TradingConfig
+import com.at.coba.data.TradingStrategy
 import com.at.coba.data.network.WebSocketStatus
 import com.at.coba.ui.components.ProfessionalCandlestickChart
 
@@ -39,13 +40,10 @@ fun TradeScreen(viewModel: TradeViewModel) {
     val tradeSignal by viewModel.tradeSignal.collectAsStateWithLifecycle(TradeSignal.SCANNING)
     val indicatorState by viewModel.indicatorState.collectAsStateWithLifecycle(IndicatorState())
     val tradingConfig by viewModel.tradingConfig.collectAsStateWithLifecycle()
-    val rsiValue = indicatorState.rsi
-
     var showConfigSheet by remember { mutableStateOf(false) }
 
-    // Placeholder states for Asset Pair and Strategy (UI only)
+    // Asset pair selection is not yet wired to sockets (display only).
     var assetPair by remember { mutableStateOf("CRYPTO IDX") }
-    var strategy by remember { mutableStateOf("MACD + RSI") }
 
     val isRunning = wsStatus !is WebSocketStatus.Disconnected || asStatus !is WebSocketStatus.Disconnected
     val scrollState = rememberScrollState()
@@ -144,16 +142,12 @@ fun TradeScreen(viewModel: TradeViewModel) {
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // 4. STRATEGY dropdown
+        // 4. STRATEGY dropdown (persisted; drives signal engine)
         LabeledDropdown(
             label = "STRATEGY",
-            options = listOf(
-                "MACD + RSI" to "MACD + RSI",
-                "Bollinger Bands" to "Bollinger Bands",
-                "Price Action" to "Price Action"
-            ),
-            selectedValue = strategy,
-            onSelect = { strategy = it }
+            options = TradingStrategy.entries.map { it to it.displayLabel },
+            selectedValue = tradingConfig.strategy,
+            onSelect = { viewModel.setTradingStrategy(it) }
         )
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -173,7 +167,11 @@ fun TradeScreen(viewModel: TradeViewModel) {
             )
             
             // Indicator Overlay
-            SignalOverlay(tradeSignal = tradeSignal, rsiValue = rsiValue)
+            SignalOverlay(
+                strategy = tradingConfig.strategy,
+                indicatorState = indicatorState,
+                tradeSignal = tradeSignal
+            )
 
             // Price Overlay (Real-time)
             if (tickData != null) {
@@ -283,10 +281,14 @@ fun TradingConfigSheet(
     onDismiss: () -> Unit,
     onSave: (TradingConfig) -> Unit
 ) {
-    var rsiPeriod by remember { mutableStateOf(config.rsiPeriod.toString()) }
-    var macdFast by remember { mutableStateOf(config.macdFast.toString()) }
-    var macdSlow by remember { mutableStateOf(config.macdSlow.toString()) }
-    var macdSignal by remember { mutableStateOf(config.macdSignal.toString()) }
+    var rsiPeriod by remember(config.rsiPeriod) { mutableStateOf(config.rsiPeriod.toString()) }
+    var macdFast by remember(config.macdFast) { mutableStateOf(config.macdFast.toString()) }
+    var macdSlow by remember(config.macdSlow) { mutableStateOf(config.macdSlow.toString()) }
+    var macdSignal by remember(config.macdSignal) { mutableStateOf(config.macdSignal.toString()) }
+    var bbPeriod by remember(config.bbPeriod) { mutableStateOf(config.bbPeriod.toString()) }
+    var bbStdDev by remember(config.bbStdDevMultiplier) {
+        mutableStateOf(config.bbStdDevMultiplier.toString())
+    }
 
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(
@@ -335,13 +337,39 @@ fun TradingConfigSheet(
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
             )
 
+            Text(
+                text = "Bollinger Bands",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = bbPeriod,
+                    onValueChange = { bbPeriod = it },
+                    label = { Text("BB Period") },
+                    modifier = Modifier.weight(1f),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                )
+                OutlinedTextField(
+                    value = bbStdDev,
+                    onValueChange = { bbStdDev = it },
+                    label = { Text("BB StdDev") },
+                    modifier = Modifier.weight(1f),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
+                )
+            }
+
             Button(
                 onClick = {
                     val newConfig = TradingConfig(
                         rsiPeriod = rsiPeriod.toIntOrNull() ?: config.rsiPeriod,
                         macdFast = macdFast.toIntOrNull() ?: config.macdFast,
                         macdSlow = macdSlow.toIntOrNull() ?: config.macdSlow,
-                        macdSignal = macdSignal.toIntOrNull() ?: config.macdSignal
+                        macdSignal = macdSignal.toIntOrNull() ?: config.macdSignal,
+                        bbPeriod = bbPeriod.toIntOrNull() ?: config.bbPeriod,
+                        bbStdDevMultiplier = bbStdDev.toFloatOrNull() ?: config.bbStdDevMultiplier,
+                        strategy = config.strategy
                     )
                     onSave(newConfig)
                 },
@@ -354,33 +382,71 @@ fun TradingConfigSheet(
 }
 
 @Composable
-fun BoxScope.SignalOverlay(tradeSignal: TradeSignal, rsiValue: Double) {
+fun BoxScope.SignalOverlay(
+    strategy: TradingStrategy,
+    indicatorState: IndicatorState,
+    tradeSignal: TradeSignal
+) {
     Row(
         modifier = Modifier
             .align(Alignment.TopStart)
             .padding(8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(text = "RSI: ", color = Color.White.copy(alpha = 0.5f), fontSize = 10.sp)
-        Text(
-            text = String.format("%.1f", rsiValue),
-            color = when {
-                rsiValue > 65 -> Color.Red.copy(alpha = 0.8f)
-                rsiValue < 35 -> Color.Green.copy(alpha = 0.8f)
-                else -> Color.Yellow.copy(alpha = 0.8f)
-            },
-            fontSize = 10.sp,
-            fontWeight = FontWeight.Bold
-        )
-        
+        when (strategy) {
+            TradingStrategy.MACD_RSI -> {
+                val rsiValue = indicatorState.rsi
+                Text(text = "RSI: ", color = Color.White.copy(alpha = 0.5f), fontSize = 10.sp)
+                Text(
+                    text = String.format("%.1f", rsiValue),
+                    color = when {
+                        rsiValue > 65 -> Color.Red.copy(alpha = 0.8f)
+                        rsiValue < 35 -> Color.Green.copy(alpha = 0.8f)
+                        else -> Color.Yellow.copy(alpha = 0.8f)
+                    },
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            TradingStrategy.BOLLINGER -> {
+                val u = indicatorState.bbUpper
+                val m = indicatorState.bbMiddle
+                val l = indicatorState.bbLower
+                Text(
+                    text = if (u != null && m != null && l != null) {
+                        String.format("BB %.2f / %.2f / %.2f", u, m, l)
+                    } else {
+                        "BB …"
+                    },
+                    color = Color.White.copy(alpha = 0.85f),
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.widthIn(max = 200.dp)
+                )
+            }
+            TradingStrategy.PRICE_ACTION -> {
+                Text(
+                    text = "PA: ${indicatorState.priceActionNote ?: "—"}",
+                    color = Color.White.copy(alpha = 0.85f),
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.widthIn(max = 160.dp)
+                )
+            }
+        }
+
         Spacer(modifier = Modifier.width(12.dp))
-        
+
         val (signalText, signalColor) = when (tradeSignal) {
             TradeSignal.BUY -> "BUY" to Color.Green
             TradeSignal.SELL -> "SELL" to Color.Red
             TradeSignal.SCANNING -> "SCAN" to Color.White
         }
-        
+
         Text(
             text = signalText,
             color = signalColor.copy(alpha = 0.8f),

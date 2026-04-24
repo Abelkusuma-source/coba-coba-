@@ -5,6 +5,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -19,7 +20,10 @@ data class TradingConfig(
     val rsiPeriod: Int = 14,
     val macdFast: Int = 12,
     val macdSlow: Int = 26,
-    val macdSignal: Int = 9
+    val macdSignal: Int = 9,
+    val bbPeriod: Int = 20,
+    val bbStdDevMultiplier: Float = 2.0f,
+    val strategy: TradingStrategy = TradingStrategy.MACD_RSI
 )
 
 class DataStoreManager(private val context: Context) {
@@ -41,7 +45,10 @@ class DataStoreManager(private val context: Context) {
         val MACD_FAST_KEY = intPreferencesKey("macd_fast")
         val MACD_SLOW_KEY = intPreferencesKey("macd_slow")
         val MACD_SIGNAL_KEY = intPreferencesKey("macd_signal")
-        
+        val BB_PERIOD_KEY = intPreferencesKey("bb_period")
+        val BB_STDDEV_KEY = floatPreferencesKey("bb_stddev")
+        val TRADING_STRATEGY_KEY = stringPreferencesKey("trading_strategy")
+
         const val DEVICE_TYPE = "web"
     }
 
@@ -141,7 +148,10 @@ class DataStoreManager(private val context: Context) {
             rsiPeriod = preferences[RSI_PERIOD_KEY] ?: 14,
             macdFast = preferences[MACD_FAST_KEY] ?: 12,
             macdSlow = preferences[MACD_SLOW_KEY] ?: 26,
-            macdSignal = preferences[MACD_SIGNAL_KEY] ?: 9
+            macdSignal = preferences[MACD_SIGNAL_KEY] ?: 9,
+            bbPeriod = preferences[BB_PERIOD_KEY] ?: 20,
+            bbStdDevMultiplier = preferences[BB_STDDEV_KEY] ?: 2.0f,
+            strategy = TradingStrategy.fromStorageKey(preferences[TRADING_STRATEGY_KEY])
         )
     }
 
@@ -151,6 +161,9 @@ class DataStoreManager(private val context: Context) {
             preferences[MACD_FAST_KEY] = config.macdFast
             preferences[MACD_SLOW_KEY] = config.macdSlow
             preferences[MACD_SIGNAL_KEY] = config.macdSignal
+            preferences[BB_PERIOD_KEY] = config.bbPeriod.coerceIn(5, 200)
+            preferences[BB_STDDEV_KEY] = config.bbStdDevMultiplier.coerceIn(0.5f, 4f)
+            preferences[TRADING_STRATEGY_KEY] = config.strategy.storageKey
         }
     }
 

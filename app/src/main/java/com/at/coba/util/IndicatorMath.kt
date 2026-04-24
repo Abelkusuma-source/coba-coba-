@@ -2,6 +2,19 @@ package com.at.coba.util
 
 import com.at.coba.data.model.Candle
 import kotlin.math.abs
+import kotlin.math.sqrt
+
+data class BollingerBands(
+    val middle: Double,
+    val upper: Double,
+    val lower: Double
+)
+
+sealed class PriceActionOutcome {
+    data object Neutral : PriceActionOutcome()
+    data class Bullish(val pattern: String) : PriceActionOutcome()
+    data class Bearish(val pattern: String) : PriceActionOutcome()
+}
 
 object IndicatorMath {
 
@@ -73,6 +86,51 @@ object IndicatorMath {
         val histogram = macdLine - signalLine
 
         return Triple(macdLine, signalLine, histogram)
+    }
+
+    /**
+     * Bollinger Bands: SMA middle, upper/lower = middle ± k × σ (population σ over [period] closes).
+     */
+    fun calculateBollingerBands(
+        candles: List<Candle>,
+        period: Int,
+        stdDevMultiplier: Double
+    ): BollingerBands? {
+        val p = period.coerceAtLeast(2)
+        if (candles.size < p) return null
+        val closes = candles.takeLast(p).map { it.close }
+        val mean = closes.average()
+        val variance = closes.sumOf { val d = it - mean; d * d } / p
+        val sigma = sqrt(variance)
+        val upper = mean + stdDevMultiplier * sigma
+        val lower = mean - stdDevMultiplier * sigma
+        return BollingerBands(middle = mean, upper = upper, lower = lower)
+    }
+
+    /**
+     * Lightweight price-action rules: two-candle engulfing and breakout of prior bar range.
+     */
+    fun evaluatePriceAction(candles: List<Candle>): PriceActionOutcome {
+        if (candles.size < 3) return PriceActionOutcome.Neutral
+        val i = candles.lastIndex
+        val c0 = candles[i]
+        val c1 = candles[i - 1]
+
+        val bullEngulf = c1.close < c1.open && c0.close > c0.open &&
+            c0.close >= c1.open && c0.open <= c1.close
+        val bearEngulf = c1.close > c1.open && c0.close < c0.open &&
+            c0.close <= c1.open && c0.open >= c1.close
+
+        if (bullEngulf) return PriceActionOutcome.Bullish("Engulfing ↑")
+        if (bearEngulf) return PriceActionOutcome.Bearish("Engulfing ↓")
+
+        val bullBreak = c0.close > c1.high && c0.close >= c0.open
+        val bearBreak = c0.close < c1.low && c0.close <= c0.open
+
+        if (bullBreak) return PriceActionOutcome.Bullish("Break high")
+        if (bearBreak) return PriceActionOutcome.Bearish("Break low")
+
+        return PriceActionOutcome.Neutral
     }
 
     private fun calculateEMA(data: List<Double>, period: Int): List<Double> {
