@@ -24,7 +24,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.at.coba.data.network.CookieManager
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.launch
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
@@ -44,6 +48,15 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         dataStoreManager = DataStoreManager(this)
+        lifecycleScope.launch {
+            dataStoreManager.migrateSessionCookieIntoUnifiedIfNeeded()
+            val id = dataStoreManager.getOrCreateDeviceId()
+            CookieManager.setDeviceId(id)
+            dataStoreManager.cookies.collect { CookieManager.setServerCookiesFromDataStore(it) }
+        }
+        lifecycleScope.launch {
+            dataStoreManager.authToken.collect { CookieManager.setAuthToken(it) }
+        }
         enableEdgeToEdge()
         setContent {
             // Task 1.c: Gunakan collectAsStateWithLifecycle()

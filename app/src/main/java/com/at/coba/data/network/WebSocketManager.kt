@@ -9,8 +9,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -54,29 +54,14 @@ class WebSocketManager(private val dataStoreManager: DataStoreManager) {
 
         scope.launch {
             try {
-                val deviceId = dataStoreManager.getOrCreateDeviceId()
-                val authToken = dataStoreManager.authToken.first()
-                val cookies = dataStoreManager.cookies.first() ?: ""
-
-                // Redundant/Robust Cookie logic untuk bypass 401
-                val cookieMap = mutableMapOf<String, String>()
-                if (cookies.isNotEmpty()) {
-                    cookies.split(";").forEach {
-                        val parts = it.split("=", limit = 2)
-                        if (parts.size == 2) {
-                            val key = parts[0].trim()
-                            val value = parts[1].trim()
-                            if (key.isNotEmpty()) cookieMap[key] = value
-                        }
+                var deviceId = CookieManager.getDeviceId()
+                if (deviceId.isEmpty()) {
+                    deviceId = withContext(Dispatchers.IO) {
+                        dataStoreManager.getOrCreateDeviceId()
                     }
+                    CookieManager.setDeviceId(deviceId)
                 }
-                cookieMap["device_id"] = deviceId
-                cookieMap["device_type"] = "web"
-                if (!authToken.isNullOrEmpty()) {
-                    cookieMap["authtoken"] = authToken
-                    cookieMap["token"] = authToken
-                }
-                val finalCookieHeader = cookieMap.map { "${it.key}=${it.value}" }.joinToString("; ")
+                val finalCookieHeader = CookieManager.getCookieHeader()
 
                 val request = Request.Builder()
                     .url(WS_URL)

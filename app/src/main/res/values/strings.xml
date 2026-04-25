@@ -18,4 +18,39 @@
     <string name="total_profit_loss">Total Profit/Loss</string>
     <string name="back">Back</string>
     <string name="debug">Debug</string>
+
+    <!-- Trading config sheet -->
+    <string name="trading_config_title">Indicator configuration</string>
+    <string name="trading_config_apply">Apply and reset chart</string>
+    <string name="trading_config_reset_to_defaults">Reset to defaults</string>
+    <string name="trading_config_restored_snackbar">Restored to defaults — tap Apply to save</string>
+    <string name="trading_config_discard_title">Discard changes?</string>
+    <string name="trading_config_discard">Discard</string>
+    <string name="trading_config_keep_editing">Keep editing</string>
+    <string name="trading_config_price_action_note">No parameters needed for Price Action.</string>
+    <string name="trading_config_label_rsi">RSI period</string>
+    <string name="trading_config_label_macd_fast">MACD fast</string>
+    <string name="trading_config_label_macd_slow">MACD slow</string>
+    <string name="trading_config_label_macd_signal">MACD signal period</string>
+    <string name="trading_config_label_bb_period">BB period</string>
+    <string name="trading_config_label_bb_std">BB std dev</string>
+    <string name="trading_config_bollinger_section">Bollinger bands</string>
+    <string name="trading_config_range_rsi">Range: %1$d–%2$d</string>
+    <string name="trading_config_range_macd_fast">Range: %1$d–%2$d; must be &lt; slow</string>
+    <string name="trading_config_range_macd_slow">Range: %1$d–%2$d</string>
+    <string name="trading_config_range_macd_signal">Range: %1$d–%2$d</string>
+    <string name="trading_config_range_bb_period">Range: %1$d–%2$d</string>
+    <string name="trading_config_range_bb_std">Range: %1$.1f–%2$.1f</string>
+    <string name="trading_config_macd_fast_slow_hint">Fast (%1$d) must be less than slow (%2$d)</string>
+    <string name="trading_config_error_required">This field is required</string>
+    <string name="trading_config_error_not_integer">Enter a valid whole number</string>
+    <string name="trading_config_error_not_decimal">Enter a valid number</string>
+    <string name="trading_config_error_rsi_range">RSI must be between %1$d and %2$d</string>
+    <string name="trading_config_error_macd_fast_range">MACD fast must be between %1$d and %2$d</string>
+    <string name="trading_config_error_macd_slow_range">MACD slow must be between %1$d and %2$d</string>
+    <string name="trading_config_error_macd_order">MACD fast (%1$d) must be less than slow (%2$d)</string>
+    <string name="trading_config_error_macd_signal_range">MACD signal must be between %1$d and %2$d</string>
+    <string name="trading_config_error_bb_period_range">BB period must be between %1$d and %2$d</string>
+    <string name="trading_config_error_bb_std_range">BB std dev must be between %1$.1f and %2$.1f</string>
+    <string name="trading_config_rsi_required">RSI period is required</string>
 </resources>

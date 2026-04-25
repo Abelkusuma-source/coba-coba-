@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModelProvider
 import com.at.coba.data.DataStoreManager
 import com.at.coba.data.TradingConfig
 import com.at.coba.data.TradingStrategy
+import com.at.coba.data.network.CookieManager
 import com.at.coba.data.network.AssetSocketManager
 import com.at.coba.data.network.WebSocketManager
 import com.at.coba.data.network.WebSocketStatus
@@ -285,6 +286,8 @@ class TradeViewModel(
             // 4. Hapus data autentikasi dari DataStore
             // (Tetap mempertahankan Device ID sesuai requirement)
             dataStoreManager.clearAuthData()
+            CookieManager.setServerCookiesFromDataStore(null)
+            CookieManager.setAuthToken(null)
         }
     }
 

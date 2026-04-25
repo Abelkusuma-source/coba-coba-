@@ -43,7 +43,8 @@ class DataStoreManager(private val context: Context) {
         val DEVICE_ID_KEY = stringPreferencesKey("device_id")
         val COOKIES_KEY = stringPreferencesKey("cookies")
         val TWO_FA_TOKEN_KEY = stringPreferencesKey("two_fa_token")
-        val SESSION_COOKIE_KEY = stringPreferencesKey("session_cookie")
+        /** @deprecated legacy key; migrated into [COOKIES_KEY] via [migrateSessionCookieIntoUnifiedIfNeeded] */
+        private val LEGACY_SESSION_COOKIE_KEY = stringPreferencesKey("session_cookie")
         
         val RSI_PERIOD_KEY = intPreferencesKey("rsi_period")
         val MACD_FAST_KEY = intPreferencesKey("macd_fast")
@@ -129,20 +130,36 @@ class DataStoreManager(private val context: Context) {
         }
     }
 
-    val sessionCookie: Flow<String?> = dataStore.data.map { preferences ->
-        preferences[SESSION_COOKIE_KEY]
-    }
-
-    suspend fun setSessionCookie(cookie: String) {
+    /**
+     * One-time migration: merge legacy `session_cookie` into the unified [COOKIES_KEY] and remove the old key.
+     */
+    suspend fun migrateSessionCookieIntoUnifiedIfNeeded() {
         dataStore.edit { preferences ->
-            preferences[SESSION_COOKIE_KEY] = cookie
+            val legacy = preferences[LEGACY_SESSION_COOKIE_KEY]
+            if (legacy.isNullOrEmpty()) return@edit
+            val current = (preferences[COOKIES_KEY] ?: "").trim()
+            val merged = mergeCookieHeaderParts(listOf(legacy, current).filter { it.isNotEmpty() })
+            if (merged.isNotEmpty()) {
+                preferences[COOKIES_KEY] = merged
+            }
+            preferences.remove(LEGACY_SESSION_COOKIE_KEY)
         }
     }
 
-    suspend fun clearSessionCookie() {
-        dataStore.edit { preferences ->
-            preferences.remove(SESSION_COOKIE_KEY)
+    private fun mergeCookieHeaderParts(parts: List<String>): String {
+        val map = linkedMapOf<String, String>()
+        for (p in parts) {
+            p.split(';').forEach { seg ->
+                val s = seg.trim()
+                if (s.isEmpty()) return@forEach
+                val kv = s.split('=', limit = 2)
+                if (kv.size == 2) {
+                    val k = kv[0].trim()
+                    if (k.isNotEmpty()) map[k] = kv[1].trim()
+                }
+            }
         }
+        return map.entries.joinToString("; ") { "${it.key}=${it.value}" }
     }
 
     suspend fun setAuthToken(token: String) {
@@ -269,7 +286,7 @@ class DataStoreManager(private val context: Context) {
             preferences.remove(AUTH_TOKEN_KEY)
             preferences.remove(COOKIES_KEY)
             preferences.remove(TWO_FA_TOKEN_KEY)
-            preferences.remove(SESSION_COOKIE_KEY)
+            preferences.remove(LEGACY_SESSION_COOKIE_KEY)
             preferences.remove(IS_2FA_ENABLED_KEY)
             preferences.remove(USER_ID_KEY)
         }
