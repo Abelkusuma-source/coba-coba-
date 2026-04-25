@@ -221,7 +221,6 @@ fun MainScreen(dataStoreManager: DataStoreManager) {
             composable(Screen.History.route) { HistoryScreen() }
             composable(Screen.Web.route) { WebScreen() }
             composable(Screen.Profile.route) { 
-                // Task 2.d: Hubungkan ViewModel ke UI
                 val profileViewModel: ProfileViewModel = viewModel(
                     factory = ProfileViewModel.Factory(
                         LocalContext.current.applicationContext as Application,
@@ -234,11 +233,7 @@ fun MainScreen(dataStoreManager: DataStoreManager) {
                 val userPhone by profileViewModel.userPhone.collectAsStateWithLifecycle()
                 val uiState by profileViewModel.uiState.collectAsStateWithLifecycle()
 
-                // Akses TradeViewModel untuk performLogout
-                val tradeViewModel: TradeViewModel = viewModel(
-                    factory = TradeViewModel.Factory(dataStoreManager)
-                )
-
+                val scope = rememberCoroutineScope()
                 ProfileScreen(
                     themeMode = currentThemeMode,
                     profileImageUri = profileImageUri,
@@ -250,7 +245,9 @@ fun MainScreen(dataStoreManager: DataStoreManager) {
                     onThemeSelected = profileViewModel::onThemeSelected,
                     onUpdatePhone = profileViewModel::updatePhone,
                     onChangePassword = profileViewModel::changePassword,
-                    onLogout = { tradeViewModel.performLogout() }
+                    onLogout = { 
+                        scope.launch { dataStoreManager.clearAuthData() }
+                    }
                 )
             }
             composable(Screen.Debug.route) { DebugScreen(dataStoreManager) }

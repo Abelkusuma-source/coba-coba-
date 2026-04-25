@@ -1,16 +1,17 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.kotlin.android)
 }
 
 android {
     namespace = "com.at.coba"
-    compileSdk = 36
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.at.coba"
         minSdk = 26
-        targetSdk = 36
+        targetSdk = 35
         versionCode = 1
         versionName = "6.6.6"
 
@@ -34,6 +35,9 @@ android {
         compose = true
         // Mengaktifkan buildConfig agar bisa diakses di kode Kotlin
         buildConfig = true
+    }
+    kotlinOptions {
+        jvmTarget = "11"
     }
 }
 

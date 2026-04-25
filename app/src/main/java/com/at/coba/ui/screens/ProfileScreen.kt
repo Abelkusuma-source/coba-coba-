@@ -6,18 +6,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -25,51 +14,26 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
-import androidx.compose.material.icons.filled.BrightnessAuto
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.DarkMode
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.LightMode
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.painter.ColorPainter
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.role
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
-import coil.request.ImageRequest
 import com.at.coba.R
 import com.at.coba.data.ThemeMode
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.collectLatest
-
-// Skema warna biru muda sesuai referensi gambar
-val LightBlueButton = Color(0xFFD1E9FF)
-// DarkBlueText removed since unused
-
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -86,12 +50,13 @@ fun ProfileScreen(
     onChangePassword: (String, String, String) -> Unit,
     onLogout: () -> Unit
 ) {
+    val lightBlueButton = Color(0xFFD1E9FF)
+    
     var expanded by remember { mutableStateOf(false) }
     var showLogoutDialog by remember { mutableStateOf(false) }
     
     val snackbarHostState = remember { SnackbarHostState() }
     val scrollState = rememberScrollState()
-    val context = LocalContext.current
 
     // Form states
     var phone by remember(userPhone) { mutableStateOf(userPhone ?: "") }
@@ -159,13 +124,11 @@ fun ProfileScreen(
                         Icon(Icons.Default.Person, null, Modifier.size(80.dp), MaterialTheme.colorScheme.primary)
                     } else {
                         AsyncImage(
-                            model = ImageRequest.Builder(context)
-                                .data(profileImageUri)
-                                .crossfade(true)
-                                .build(),
+                            model = profileImageUri,
                             contentDescription = null,
                             modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop
+                            contentScale = ContentScale.Crop,
+                            error = rememberVectorPainter(Icons.Default.Person)
                         )
                     }
                 }
@@ -212,7 +175,7 @@ fun ProfileScreen(
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.height(56.dp),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = LightBlueButton,
+                            containerColor = lightBlueButton,
                             contentColor = MaterialTheme.colorScheme.primary
                         )
                     ) {
@@ -302,7 +265,7 @@ fun ProfileScreen(
                     modifier = Modifier.fillMaxWidth().height(52.dp),
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = LightBlueButton,
+                        containerColor = lightBlueButton,
                         contentColor = MaterialTheme.colorScheme.primary
                     )
                 ) {
@@ -334,13 +297,18 @@ fun ProfileScreen(
                             onValueChange = {},
                             readOnly = true,
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
-                            modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, true).fillMaxWidth(),
+                            modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable, true).fillMaxWidth(),
                             shape = RoundedCornerShape(12.dp)
                         )
                         ExposedDropdownMenu(expanded, { expanded = false }) {
                             ThemeMode.entries.forEach { mode ->
+                                val labelText = when(mode) {
+                                    ThemeMode.LIGHT -> "Terang"
+                                    ThemeMode.DARK -> "Gelap"
+                                    else -> "Ikuti Sistem"
+                                }
                                 DropdownMenuItem(
-                                    text = { Text(mode.name) },
+                                    text = { Text(labelText) },
                                     onClick = { onThemeSelected(mode); expanded = false }
                                 )
                             }
@@ -365,4 +333,3 @@ fun ProfileScreen(
         }
     }
 }
-
