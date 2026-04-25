@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.at.coba.data.DataStoreManager
 import com.at.coba.data.network.ApiClient
+import com.at.coba.data.network.CookieManager
 import com.at.coba.data.network.LoginRequest
 import com.at.coba.data.network.OtpRequest
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -31,16 +32,16 @@ class LoginViewModel(private val dataStoreManager: DataStoreManager) : ViewModel
 
     private var savedEmail = ""
     private var savedPassword = ""
-    private var savedSessionCookie = ""
 
     fun login(context: Context, email: String, password: String) {
         viewModelScope.launch {
             _uiState.value = LoginUiState.Loading
             try {
-                // Bersihkan cookie lama sebelum login baru
-                dataStoreManager.setCookies("")
-                dataStoreManager.clearSessionCookie()
-                
+                // Clear stale auth + unified cookies before a new login attempt
+                dataStoreManager.clearAuthData()
+                CookieManager.setServerCookiesFromDataStore(null)
+                CookieManager.setAuthToken(null)
+
                 val apiService = ApiClient.getApiService(context)
                 val response = apiService.login(LoginRequest(email, password))
                 
@@ -64,8 +65,6 @@ class LoginViewModel(private val dataStoreManager: DataStoreManager) : ViewModel
                         if (code == "2fa_required") {
                             savedEmail = email
                             savedPassword = password
-                            // Simpan SESSION cookie yang dikirim server ke memory
-                            savedSessionCookie = dataStoreManager.sessionCookie.first() ?: ""
                             _uiState.value = LoginUiState.Is2FARequired
                             return@launch
                         }
@@ -110,7 +109,6 @@ class LoginViewModel(private val dataStoreManager: DataStoreManager) : ViewModel
                 // STEP 3: Save authtoken & navigate
                 dataStoreManager.setAuthToken(loginResponse.data.authtoken)
                 dataStoreManager.setIs2FAEnabled(loginResponse.data.is_2fa_enabled)
-                dataStoreManager.clearSessionCookie()
 
                 val hasAgreed = dataStoreManager.hasUserAgreed.first()
                 _uiState.value = LoginUiState.Success(hasAgreed)

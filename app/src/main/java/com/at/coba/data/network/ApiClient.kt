@@ -2,8 +2,10 @@ package com.at.coba.data.network
 
 import android.content.Context
 import com.at.coba.data.DataStoreManager
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import okhttp3.Cookie
 import okhttp3.CookieJar
 import okhttp3.HttpUrl
@@ -11,6 +13,8 @@ import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
+
+private val apiClientIoScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
 // SESUDAH ✅
 object ApiClient {
@@ -25,32 +29,14 @@ object ApiClient {
 
         val cookieJar = object : CookieJar {
             override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
-                val sessionCookie = cookies.firstOrNull { it.name == "SESSION" }
-                val otherCookies = cookies.filter { it.name != "SESSION" }
-
-                if (sessionCookie != null) {
-                    runBlocking { dataStoreManager.setSessionCookie("SESSION=${sessionCookie.value}") }
-                }
-
-                val cookieString = otherCookies.joinToString("; ") { "${it.name}=${it.value}" }
-                if (cookieString.isNotEmpty()) {
-                    runBlocking { dataStoreManager.setCookies(cookieString) }
+                val merged = CookieManager.applyServerCookiesFromHttpResponse(cookies)
+                apiClientIoScope.launch {
+                    dataStoreManager.setCookies(merged)
                 }
             }
 
             override fun loadForRequest(url: HttpUrl): List<Cookie> {
-                val cookieString = runBlocking { dataStoreManager.cookies.first() }
-                if (cookieString.isNullOrEmpty()) return emptyList()
-                return cookieString.split("; ").mapNotNull { part ->
-                    val pairs = part.split("=", limit = 2)
-                    if (pairs.size == 2) {
-                        Cookie.Builder()
-                            .name(pairs[0].trim())
-                            .value(pairs[1].trim())
-                            .domain(url.host)
-                            .build()
-                    } else null
-                }
+                return CookieManager.cookiesForHttpUrl(url)
             }
         }
 
@@ -58,7 +44,7 @@ object ApiClient {
             level = HttpLoggingInterceptor.Level.BODY
         }
 
-        val authInterceptor = AuthInterceptor(dataStoreManager)
+        val authInterceptor = AuthInterceptor()
 
         val okHttpClient = OkHttpClient.Builder()
             .cookieJar(cookieJar)

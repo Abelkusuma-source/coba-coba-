@@ -1,18 +1,13 @@
 package com.at.coba.data.network
 
 import com.at.coba.data.DataStoreManager
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.runBlocking
 import okhttp3.Interceptor
 import okhttp3.Response
 
-class AuthInterceptor(private val dataStoreManager: DataStoreManager) : Interceptor {
+class AuthInterceptor : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
-        val deviceId = runBlocking { dataStoreManager.getOrCreateDeviceId() }
-        val authToken = runBlocking { dataStoreManager.authToken.first() }
-        val cookies = runBlocking { dataStoreManager.cookies.first() }
-        val sessionCookie = runBlocking { dataStoreManager.sessionCookie.first() }
-
+        val deviceId = CookieManager.getDeviceId()
+        val authToken = CookieManager.getAuthToken()
         val requestBuilder = chain.request().newBuilder()
             .addHeader("Device-Id", deviceId)
             .addHeader("Device-Type", DataStoreManager.DEVICE_TYPE)
@@ -21,15 +16,7 @@ class AuthInterceptor(private val dataStoreManager: DataStoreManager) : Intercep
         if (!authToken.isNullOrEmpty()) {
             requestBuilder.addHeader("Authorization-Token", authToken)
         }
-
-        val cookieHeader = buildString {
-            append("device_id=$deviceId; device_type=${DataStoreManager.DEVICE_TYPE}")
-            if (!authToken.isNullOrEmpty()) append("; authtoken=$authToken")
-            if (!sessionCookie.isNullOrEmpty()) append("; $sessionCookie")
-            if (!cookies.isNullOrEmpty()) append("; $cookies")
-        }
-        requestBuilder.addHeader("Cookie", cookieHeader)
-
+        requestBuilder.addHeader("Cookie", CookieManager.getCookieHeader())
         return chain.proceed(requestBuilder.build())
     }
 }
