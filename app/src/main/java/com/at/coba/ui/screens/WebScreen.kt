@@ -22,10 +22,14 @@ fun WebScreen() {
 
     // Mengecek versi Chrome menggunakan User Agent default sistem tanpa harus membuat WebView terlebih dahulu
     val versionInfo = remember(context) {
-        val userAgent = WebSettings.getDefaultUserAgent(context)
-        val currentVersion = extractChromeVersion(userAgent)
-        val supported = isVersionGreaterOrEqual(currentVersion, minVersion)
-        currentVersion to supported
+        try {
+            val userAgent = WebSettings.getDefaultUserAgent(context)
+            val currentVersion = extractChromeVersion(userAgent)
+            val supported = isVersionGreaterOrEqual(currentVersion, minVersion)
+            currentVersion to supported
+        } catch (_: Exception) {
+            "Unknown" to true // Fallback to supported if we can't check
+        }
     }
 
     val (chromeVersion, isSupported) = versionInfo

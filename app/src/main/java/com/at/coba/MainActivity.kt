@@ -1,5 +1,6 @@
 package com.at.coba
 
+import android.app.Application
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -209,10 +210,16 @@ fun MainScreen(dataStoreManager: DataStoreManager) {
             composable(Screen.Profile.route) { 
                 // Task 2.d: Hubungkan ViewModel ke UI
                 val profileViewModel: ProfileViewModel = viewModel(
-                    factory = ProfileViewModel.Factory(dataStoreManager)
+                    factory = ProfileViewModel.Factory(
+                        LocalContext.current.applicationContext as Application,
+                        dataStoreManager
+                    )
                 )
                 val currentThemeMode by profileViewModel.themeMode.collectAsStateWithLifecycle()
                 val profileImageUri by profileViewModel.profileImageUri.collectAsStateWithLifecycle()
+                val userEmail by profileViewModel.userEmail.collectAsStateWithLifecycle()
+                val userPhone by profileViewModel.userPhone.collectAsStateWithLifecycle()
+                val uiState by profileViewModel.uiState.collectAsStateWithLifecycle()
 
                 // Akses TradeViewModel untuk performLogout
                 val tradeViewModel: TradeViewModel = viewModel(
@@ -222,8 +229,14 @@ fun MainScreen(dataStoreManager: DataStoreManager) {
                 ProfileScreen(
                     themeMode = currentThemeMode,
                     profileImageUri = profileImageUri,
+                    userEmail = userEmail,
+                    userPhone = userPhone,
+                    uiState = uiState,
+                    messageFlow = profileViewModel.message,
                     onProfileImagePicked = profileViewModel::onImageSelected,
                     onThemeSelected = profileViewModel::onThemeSelected,
+                    onUpdatePhone = profileViewModel::updatePhone,
+                    onChangePassword = profileViewModel::changePassword,
                     onLogout = { tradeViewModel.performLogout() }
                 )
             }

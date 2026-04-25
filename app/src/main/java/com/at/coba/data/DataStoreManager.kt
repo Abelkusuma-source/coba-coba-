@@ -53,6 +53,10 @@ class DataStoreManager(private val context: Context) {
         val BB_STDDEV_KEY = floatPreferencesKey("bb_stddev")
         val TRADING_STRATEGY_KEY = stringPreferencesKey("trading_strategy")
         val PROFILE_IMAGE_URI_KEY = stringPreferencesKey("profile_image_uri")
+        val PROFILE_REMOTE_AVATAR_URL_KEY = stringPreferencesKey("profile_remote_avatar_url")
+        val USER_ID_KEY = stringPreferencesKey("user_id")
+        val USER_EMAIL_KEY = stringPreferencesKey("user_email")
+        val USER_PHONE_KEY = stringPreferencesKey("user_phone")
 
         /** Internal file name after copying picker content into app storage. */
         const val PROFILE_IMAGE_INTERNAL_FILE = "profile_image.jpg"
@@ -155,9 +159,54 @@ class DataStoreManager(private val context: Context) {
         preferences[PROFILE_IMAGE_URI_KEY]
     }
 
+    val profileRemoteAvatarUrl: Flow<String?> = dataStore.data.map { preferences ->
+        preferences[PROFILE_REMOTE_AVATAR_URL_KEY]
+    }
+
+    val userEmail: Flow<String?> = dataStore.data.map { it[USER_EMAIL_KEY] }
+    val userPhone: Flow<String?> = dataStore.data.map { it[USER_PHONE_KEY] }
+
+    suspend fun getStoredUserId(): String? = dataStore.data.map { it[USER_ID_KEY] }.first()
+
+    suspend fun setUserId(userId: String) {
+        dataStore.edit { preferences ->
+            preferences[USER_ID_KEY] = userId
+        }
+    }
+
+    suspend fun setUserProfileInfo(email: String?, phone: String?) {
+        dataStore.edit { preferences ->
+            if (email != null) preferences[USER_EMAIL_KEY] = email
+            if (phone != null) preferences[USER_PHONE_KEY] = phone
+        }
+    }
+
+    suspend fun setProfileRemoteAvatarUrl(url: String?) {
+        dataStore.edit { preferences ->
+            if (url.isNullOrBlank()) {
+                preferences.remove(PROFILE_REMOTE_AVATAR_URL_KEY)
+            } else {
+                preferences[PROFILE_REMOTE_AVATAR_URL_KEY] = url
+            }
+        }
+    }
+
     suspend fun setProfileImageUri(uri: String) {
         dataStore.edit { preferences ->
             preferences[PROFILE_IMAGE_URI_KEY] = uri
+        }
+    }
+
+    /**
+     * Removes cached profile file and profile-related keys (not [USER_ID_KEY]).
+     */
+    suspend fun clearProfileImageStorage() {
+        withContext(Dispatchers.IO) {
+            File(context.filesDir, PROFILE_IMAGE_INTERNAL_FILE).delete()
+        }
+        dataStore.edit { preferences ->
+            preferences.remove(PROFILE_IMAGE_URI_KEY)
+            preferences.remove(PROFILE_REMOTE_AVATAR_URL_KEY)
         }
     }
 
@@ -167,7 +216,7 @@ class DataStoreManager(private val context: Context) {
      */
     suspend fun persistProfileImageFromPicker(source: Uri?) {
         if (source == null) {
-            clearPersistedProfileImage()
+            clearProfileImageStorage()
             return
         }
         try {
@@ -180,16 +229,7 @@ class DataStoreManager(private val context: Context) {
             val persisted = Uri.fromFile(File(context.filesDir, PROFILE_IMAGE_INTERNAL_FILE)).toString()
             setProfileImageUri(persisted)
         } catch (_: Exception) {
-            clearPersistedProfileImage()
-        }
-    }
-
-    private suspend fun clearPersistedProfileImage() {
-        withContext(Dispatchers.IO) {
-            File(context.filesDir, PROFILE_IMAGE_INTERNAL_FILE).delete()
-        }
-        dataStore.edit { preferences ->
-            preferences.remove(PROFILE_IMAGE_URI_KEY)
+            clearProfileImageStorage()
         }
     }
 
@@ -224,12 +264,14 @@ class DataStoreManager(private val context: Context) {
     }
 
     suspend fun clearAuthData() {
+        clearProfileImageStorage()
         dataStore.edit { preferences ->
             preferences.remove(AUTH_TOKEN_KEY)
             preferences.remove(COOKIES_KEY)
             preferences.remove(TWO_FA_TOKEN_KEY)
             preferences.remove(SESSION_COOKIE_KEY)
             preferences.remove(IS_2FA_ENABLED_KEY)
+            preferences.remove(USER_ID_KEY)
         }
     }
 

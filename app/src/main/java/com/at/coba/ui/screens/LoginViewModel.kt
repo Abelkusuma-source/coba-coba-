@@ -8,6 +8,7 @@ import com.at.coba.data.DataStoreManager
 import com.at.coba.data.network.ApiClient
 import com.at.coba.data.network.LoginRequest
 import com.at.coba.data.network.OtpRequest
+import com.at.coba.data.repository.UserProfileRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -47,10 +48,12 @@ class LoginViewModel(private val dataStoreManager: DataStoreManager) : ViewModel
                 // Simpan data ke DataStore
                 dataStoreManager.setAuthToken(response.data.authtoken)
                 dataStoreManager.setIs2FAEnabled(response.data.is_2fa_enabled)
-                
+
+                UserProfileRepository.syncAfterLogin(context.applicationContext, response.data)
+
                 // Cek status user agreement
                 val hasAgreed = dataStoreManager.hasUserAgreed.first()
-                
+
                 _uiState.value = LoginUiState.Success(hasAgreed)
             } catch (e: HttpException) {
                 val errorBody = e.response()?.errorBody()?.string()
@@ -111,6 +114,8 @@ class LoginViewModel(private val dataStoreManager: DataStoreManager) : ViewModel
                 dataStoreManager.setAuthToken(loginResponse.data.authtoken)
                 dataStoreManager.setIs2FAEnabled(loginResponse.data.is_2fa_enabled)
                 dataStoreManager.clearSessionCookie()
+
+                UserProfileRepository.syncAfterLogin(context.applicationContext, loginResponse.data)
 
                 val hasAgreed = dataStoreManager.hasUserAgreed.first()
                 _uiState.value = LoginUiState.Success(hasAgreed)

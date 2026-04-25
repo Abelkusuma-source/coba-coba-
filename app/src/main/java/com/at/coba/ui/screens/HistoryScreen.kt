@@ -28,7 +28,7 @@ import java.util.*
 data class HistoryItem(
     val id: Int,
     val pair: String,
-    val status: String, // won, lost, tie
+    val status: String, // Won, Lost, Tie
     val type: String,   // BUY, SELL
     val accountMode: String, // Real, Demo
     val currency: String,    // IDR, USD
@@ -69,7 +69,7 @@ fun HistoryScreen() {
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            FilterDropdown(stringResource(R.string.status), listOf("All", "won", "lost", "tie"), statusFilter, Modifier.weight(1f)) { statusFilter = it }
+            FilterDropdown(stringResource(R.string.status), listOf("All", "Won", "Lost", "Tie"), statusFilter, Modifier.weight(1f)) { statusFilter = it }
             FilterDropdown(stringResource(R.string.pair), listOf("All", "ASIA/X", "USD/USDT"), pairFilter, Modifier.weight(1f)) { pairFilter = it }
         }
         

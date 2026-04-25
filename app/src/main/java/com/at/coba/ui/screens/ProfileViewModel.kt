@@ -1,17 +1,37 @@
 package com.at.coba.ui.screens
 
+import android.app.Application
 import android.net.Uri
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.at.coba.data.DataStoreManager
 import com.at.coba.data.ThemeMode
+import com.at.coba.data.network.ApiClient
+import com.at.coba.data.network.ChangePasswordRequest
+import com.at.coba.data.network.UpdateProfileRequest
+import com.at.coba.data.repository.UserProfileRepository
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-class ProfileViewModel(private val dataStoreManager: DataStoreManager) : ViewModel() {
+class ProfileViewModel(
+    application: Application,
+    private val dataStoreManager: DataStoreManager
+) : AndroidViewModel(application) {
+
+    private val _uiState = MutableStateFlow<ProfileUiState>(ProfileUiState.Idle)
+    val uiState: StateFlow<ProfileUiState> = _uiState.asStateFlow()
+
+    private val _message = MutableSharedFlow<String>()
+    val message: SharedFlow<String> = _message.asSharedFlow()
 
     val themeMode: StateFlow<ThemeMode> = dataStoreManager.themeMode
         .stateIn(
@@ -27,9 +47,63 @@ class ProfileViewModel(private val dataStoreManager: DataStoreManager) : ViewMod
             initialValue = null
         )
 
+    val userEmail: StateFlow<String?> = dataStoreManager.userEmail
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    val userPhone: StateFlow<String?> = dataStoreManager.userPhone
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    init {
+        refreshProfile()
+    }
+
+    fun refreshProfile() {
+        viewModelScope.launch {
+            UserProfileRepository.fetchAndSyncFullProfile(getApplication())
+        }
+    }
+
+    fun updatePhone(newPhone: String) {
+        viewModelScope.launch {
+            _uiState.value = ProfileUiState.Loading
+            try {
+                val apiService = ApiClient.getApiService(getApplication())
+                apiService.updateProfile(UpdateProfileRequest(phone = newPhone))
+                dataStoreManager.setUserProfileInfo(null, newPhone)
+                _message.emit("Phone number updated successfully")
+                _uiState.value = ProfileUiState.Idle
+            } catch (e: Exception) {
+                _message.emit("Update failed: ${e.message}")
+                _uiState.value = ProfileUiState.Idle
+            }
+        }
+    }
+
+    fun changePassword(current: String, new: String, confirm: String) {
+        if (new != confirm) {
+            viewModelScope.launch { _message.emit("Passwords do not match") }
+            return
+        }
+        viewModelScope.launch {
+            _uiState.value = ProfileUiState.Loading
+            try {
+                val apiService = ApiClient.getApiService(getApplication())
+                apiService.changePassword(ChangePasswordRequest(current, new, confirm))
+                _message.emit("Password changed successfully")
+                _uiState.value = ProfileUiState.Idle
+            } catch (e: Exception) {
+                _message.emit("Password change failed: ${e.message}")
+                _uiState.value = ProfileUiState.Idle
+            }
+        }
+    }
+
     fun onImageSelected(uri: Uri?) {
         viewModelScope.launch {
             dataStoreManager.persistProfileImageFromPicker(uri)
+            if (uri != null) {
+                UserProfileRepository.uploadCachedProfileAvatar(getApplication())
+            }
         }
     }
 
@@ -39,10 +113,18 @@ class ProfileViewModel(private val dataStoreManager: DataStoreManager) : ViewMod
         }
     }
 
-    class Factory(private val dataStoreManager: DataStoreManager) : ViewModelProvider.Factory {
+    sealed class ProfileUiState {
+        object Idle : ProfileUiState()
+        object Loading : ProfileUiState()
+    }
+
+    class Factory(
+        private val application: Application,
+        private val dataStoreManager: DataStoreManager
+    ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            return ProfileViewModel(dataStoreManager) as T
+            return ProfileViewModel(application, dataStoreManager) as T
         }
     }
 }

@@ -1,6 +1,7 @@
 package com.at.coba.data.network
 
 import android.content.Context
+import com.at.coba.BuildConfig
 import com.at.coba.data.DataStoreManager
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -12,7 +13,6 @@ import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 
-// SESUDAH ✅
 object ApiClient {
     private const val BASE_URL = "https://api.stockity.id"
 
@@ -20,9 +20,20 @@ object ApiClient {
         return buildRetrofit(context).create(ApiService::class.java)
     }
 
-    private fun buildRetrofit(context: Context): Retrofit {
-        val dataStoreManager = DataStoreManager(context)
+    /** Shared client (cookies + [AuthInterceptor]) for image download and Retrofit. */
+    fun getOkHttpClient(context: Context): OkHttpClient {
+        return buildOkHttpClient(DataStoreManager(context.applicationContext))
+    }
 
+    private fun buildRetrofit(context: Context): Retrofit {
+        return Retrofit.Builder()
+            .baseUrl(BASE_URL)
+            .client(getOkHttpClient(context))
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+    }
+
+    private fun buildOkHttpClient(dataStoreManager: DataStoreManager): OkHttpClient {
         val cookieJar = object : CookieJar {
             override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
                 val sessionCookie = cookies.firstOrNull { it.name == "SESSION" }
@@ -55,21 +66,19 @@ object ApiClient {
         }
 
         val loggingInterceptor = HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.BODY
+            level = if (BuildConfig.DEBUG) {
+                HttpLoggingInterceptor.Level.BODY
+            } else {
+                HttpLoggingInterceptor.Level.NONE
+            }
         }
 
         val authInterceptor = AuthInterceptor(dataStoreManager)
 
-        val okHttpClient = OkHttpClient.Builder()
+        return OkHttpClient.Builder()
             .cookieJar(cookieJar)
             .addInterceptor(authInterceptor)
             .addNetworkInterceptor(loggingInterceptor)
-            .build()
-
-        return Retrofit.Builder()
-            .baseUrl(BASE_URL)
-            .client(okHttpClient)
-            .addConverterFactory(GsonConverterFactory.create())
             .build()
     }
 }
