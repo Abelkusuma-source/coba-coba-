@@ -61,9 +61,11 @@ object ApiClient {
         }
 
         val authInterceptor = AuthInterceptor()
+        val setCookieInterceptor = SetCookieCaptureInterceptor(dataStoreManager)
 
         return OkHttpClient.Builder()
             .cookieJar(cookieJar)
+            .addInterceptor(setCookieInterceptor)
             .addInterceptor(authInterceptor)
             .addNetworkInterceptor(loggingInterceptor)
             .build()

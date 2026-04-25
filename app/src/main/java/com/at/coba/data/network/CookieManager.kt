@@ -57,6 +57,34 @@ object CookieManager {
     }
 
     /**
+     * Merges raw `Set-Cookie` response lines into the in-memory jar and returns the merged header string.
+     * Used when OkHttp's [CookieJar] receives an empty list (domain/path rules) but headers still carry session cookies.
+     * Updates [serverCookiesRaw] synchronously so WebSocket connect right after login sees the same cookies.
+     */
+    fun persistSetCookieLines(url: HttpUrl, lines: List<String>): String {
+        if (lines.isEmpty()) return getServerCookiesForOkHttpOnly()
+        synchronized(lock) {
+            val map = parseCookieStringToMap(serverCookiesRaw)
+            for (line in lines) {
+                val parsed = Cookie.parse(url, line)
+                if (parsed != null) {
+                    map[parsed.name] = parsed.value
+                } else {
+                    val segment = line.substringBefore(';').trim()
+                    if (segment.isEmpty()) continue
+                    val idx = segment.indexOf('=')
+                    if (idx <= 0) continue
+                    val name = segment.substring(0, idx).trim()
+                    val value = segment.substring(idx + 1).trim()
+                    if (name.isNotEmpty()) map[name] = value
+                }
+            }
+            serverCookiesRaw = mapToHeaderString(map)
+            return serverCookiesRaw
+        }
+    }
+
+    /**
      * Full `Cookie` header: server cookies plus device_id, device_type, authtoken, and token
      * for parity with the previous WebSocket / interceptor behavior.
      */

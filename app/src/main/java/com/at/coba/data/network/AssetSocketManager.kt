@@ -113,6 +113,10 @@ class AssetSocketManager(private val dataStoreManager: DataStoreManager) {
         _receivedMessage.value = null
     }
 
+    /**
+     * AS protocol is not public; compare outgoing frames with browser DevTools → Network → WS (as.stockity.id)
+     * if the server rejects or ignores subscriptions after a successful handshake.
+     */
     private fun sendSubscribeMessages(webSocket: WebSocket) {
         webSocket.send("""{"action":"subscribe","event_type":"reconnect_request"}""")
         webSocket.send("""{"action":"subscribe","rics":["Z-CRY/IDX"]}""")
