@@ -3,6 +3,7 @@ package com.at.coba.data.network
 import com.at.coba.data.DataStoreManager
 import okhttp3.Cookie
 import okhttp3.HttpUrl
+import okhttp3.Request
 
 /**
  * In-memory read-through cache for server cookies, device id, and auth token.
@@ -124,4 +125,25 @@ object CookieManager {
     private const val DEVICE_TYPE_KEY = "device_type"
     private const val AUTH_TOKEN_KEY = "authtoken"
     private const val ALT_TOKEN_KEY = "token"
+
+    /** Same UA string as [AuthInterceptor] for REST/Web parity. */
+    const val STOCKITY_USER_AGENT =
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36"
+
+    /**
+     * Applies the same auth-related headers as API calls ([AuthInterceptor]): Cookie, Device-Id,
+     * Device-Type, optional Authorization-Token, User-Agent.
+     */
+    fun applyStockitySocketRequestHeaders(builder: Request.Builder, deviceId: String): Request.Builder {
+        var b = builder
+            .header("Cookie", getCookieHeader())
+            .header("Device-Id", deviceId)
+            .header("Device-Type", DataStoreManager.DEVICE_TYPE)
+            .header("User-Agent", STOCKITY_USER_AGENT)
+        val t = getAuthToken()
+        if (!t.isNullOrEmpty()) {
+            b = b.header("Authorization-Token", t)
+        }
+        return b
+    }
 }

@@ -41,7 +41,6 @@ class WebSocketManager(private val dataStoreManager: DataStoreManager) {
 
     companion object {
         private const val WS_URL = "wss://ws.stockity.id/?v=2&vsn=2.0.0"
-        private const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36"
         private const val HEARTBEAT_INTERVAL = 60_000L
         private const val PING_INTERVAL = 30_000L
     }
@@ -61,19 +60,16 @@ class WebSocketManager(private val dataStoreManager: DataStoreManager) {
                     }
                     CookieManager.setDeviceId(deviceId)
                 }
-                val finalCookieHeader = CookieManager.getCookieHeader()
 
-                val request = Request.Builder()
-                    .url(WS_URL)
-                    .header("Cookie", finalCookieHeader)
-                    .header("Device-Id", deviceId)
-                    .header("Device-Type", "web")
+                val request = CookieManager.applyStockitySocketRequestHeaders(
+                    Request.Builder().url(WS_URL),
+                    deviceId
+                )
                     .header("Origin", "https://stockity.id")
                     .header("Referer", "https://stockity.id/")
                     .header("Accept", "*/*")
                     .header("Accept-Language", "en-US,en;q=0.9,id;q=0.8")
                     .header("Sec-WebSocket-Protocol", "phoenix")
-                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
                     .build()
 
                 val client = OkHttpClient.Builder()

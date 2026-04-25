@@ -16,76 +16,15 @@ import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import java.util.concurrent.TimeUnit
 
-// 1. Data Modeling: Membuat data class Candle yang efisien
-data class Candle(
-    val open: Double,
-    val high: Double,
-    val low: Double,
-    val close: Double,
-    val timestamp: Long
-)
-
 data class AssetTick(
     val rate: Double,
     val time: Long
 )
 
-// 2. Logic Core: CandleProcessor untuk menghitung OHLC secara real-time
-class CandleProcessor(private val durationMs: Long, private val maxCandles: Int) {
-    private val _candles = MutableStateFlow<List<Candle>>(emptyList())
-    val candles: StateFlow<List<Candle>> = _candles.asStateFlow()
-
-    private var currentCandle: Candle? = null
-    private var candlePeriodStart: Long = 0L
-    private val lock = Any()
-
-    // 5. Thread Safety: Memastikan pemrosesan data aman meskipun data datang sangat cepat
-    fun processTick(rate: Double, time: Long) {
-        synchronized(lock) {
-            if (currentCandle == null || time - candlePeriodStart >= durationMs) {
-                // Selesaikan candle lama jika ada
-                currentCandle?.let { sealCandle(it) }
-                // Mulai candle baru
-                currentCandle = Candle(open = rate, high = rate, low = rate, close = rate, timestamp = time)
-                candlePeriodStart = time
-            } else {
-                // Update candle berjalan (OHLC)
-                currentCandle = currentCandle?.copy(
-                    high = maxOf(currentCandle!!.high, rate),
-                    low = minOf(currentCandle!!.low, rate),
-                    close = rate
-                )
-            }
-        }
-    }
-
-    private fun sealCandle(candle: Candle) {
-        // 3. Memory Management: Implementasi sistem Fixed-Size Queue (Maksimal 100 candle)
-        val currentList = _candles.value.toMutableList()
-        currentList.add(candle)
-        if (currentList.size > maxCandles) {
-            currentList.removeAt(0)
-        }
-        _candles.value = currentList
-    }
-
-    fun reset() {
-        synchronized(lock) {
-            currentCandle = null
-            candlePeriodStart = 0L
-            _candles.value = emptyList()
-        }
-    }
-}
-
 class AssetSocketManager(private val dataStoreManager: DataStoreManager) {
 
     private var webSocket: WebSocket? = null
     private val scope = CoroutineScope(Dispatchers.IO)
-    
-    // 4. State Management: Menggunakan CandleProcessor yang mengekspos StateFlow
-    private val candleProcessor = CandleProcessor(durationMs = 5_000L, maxCandles = 100)
-    val candles: StateFlow<List<Candle>> = candleProcessor.candles
 
     private val _connectionStatus = MutableStateFlow<WebSocketStatus>(WebSocketStatus.Disconnected)
     val connectionStatus: StateFlow<WebSocketStatus> = _connectionStatus.asStateFlow()
@@ -98,6 +37,17 @@ class AssetSocketManager(private val dataStoreManager: DataStoreManager) {
 
     companion object {
         private const val AS_URL = "wss://as.stockity.id/"
+
+        private val TIME_FIELD_PREFIXES = arrayOf(
+            "\"time\":",
+            "\"timestamp\":",
+            "\"server_time\":",
+            "\"ts\":",
+            "\"t\":"
+        )
+
+        /** Values below this are treated as Unix seconds; otherwise milliseconds. */
+        private const val MILLIS_THRESHOLD = 1_000_000_000_000L
     }
 
     fun connect(context: Context) {
@@ -115,18 +65,15 @@ class AssetSocketManager(private val dataStoreManager: DataStoreManager) {
                     }
                     CookieManager.setDeviceId(deviceId)
                 }
-                val finalCookieHeader = CookieManager.getCookieHeader()
 
-                val request = Request.Builder()
-                    .url(AS_URL)
-                    .header("Cookie", finalCookieHeader)
-                    .header("Device-Id", deviceId)
-                    .header("Device-Type", "web")
+                val request = CookieManager.applyStockitySocketRequestHeaders(
+                    Request.Builder().url(AS_URL),
+                    deviceId
+                )
                     .header("Origin", "https://stockity.id")
                     .header("Referer", "https://stockity.id/")
                     .header("Accept", "*/*")
                     .header("Accept-Language", "en-US,en;q=0.9,id;q=0.8")
-                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
                     .build()
 
                 val client = OkHttpClient.Builder()
@@ -164,7 +111,6 @@ class AssetSocketManager(private val dataStoreManager: DataStoreManager) {
         webSocket = null
         _connectionStatus.value = WebSocketStatus.Disconnected
         _receivedMessage.value = null
-        candleProcessor.reset()
     }
 
     private fun sendSubscribeMessages(webSocket: WebSocket) {
@@ -180,15 +126,40 @@ class AssetSocketManager(private val dataStoreManager: DataStoreManager) {
             var end = json.indexOf(",", start)
             if (end == -1) end = json.indexOf("}", start)
             if (end == -1) return
-            
+
             val rate = json.substring(start, end).trim().toDoubleOrNull() ?: return
-            val now = System.currentTimeMillis()
+            val serverMillis = parseServerTimeMillis(json) ?: System.currentTimeMillis()
+            _tickData.value = AssetTick(rate, serverMillis)
+        } catch (_: Exception) {
+        }
+    }
 
-            // Update Tick Data (untuk UI harga instan)
-            _tickData.value = AssetTick(rate, now)
+    private fun parseServerTimeMillis(json: String): Long? {
+        for (prefix in TIME_FIELD_PREFIXES) {
+            val idx = json.indexOf(prefix)
+            if (idx == -1) continue
+            val number = parseJsonNumber(json, idx + prefix.length) ?: continue
+            return normalizeToUnixMillis(number)
+        }
+        return null
+    }
 
-            // Masukkan ke processor candle
-            candleProcessor.processTick(rate, now)
-        } catch (e: Exception) {}
+    private fun parseJsonNumber(json: String, fromIndex: Int): Double? {
+        var i = fromIndex
+        while (i < json.length && json[i].isWhitespace()) i++
+        if (i >= json.length) return null
+        if (json[i] == '"') return null
+        var j = i
+        while (j < json.length && (json[j].isDigit() || json[j] == '.' || json[j] == '-' || json[j] == 'e' || json[j] == 'E' || json[j] == '+')) j++
+        if (j == i) return null
+        return json.substring(i, j).toDoubleOrNull()
+    }
+
+    private fun normalizeToUnixMillis(value: Double): Long {
+        val integral = value.toLong()
+        if (value != value.toLong().toDouble()) {
+            return if (value < MILLIS_THRESHOLD) (value * 1000.0).toLong() else integral
+        }
+        return if (integral in 1 until MILLIS_THRESHOLD) integral * 1000L else integral
     }
 }

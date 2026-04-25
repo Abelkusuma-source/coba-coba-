@@ -11,7 +11,7 @@ class AuthInterceptor : Interceptor {
         val requestBuilder = chain.request().newBuilder()
             .addHeader("Device-Id", deviceId)
             .addHeader("Device-Type", DataStoreManager.DEVICE_TYPE)
-            .addHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36")
+            .addHeader("User-Agent", CookieManager.STOCKITY_USER_AGENT)
 
         if (!authToken.isNullOrEmpty()) {
             requestBuilder.addHeader("Authorization-Token", authToken)
