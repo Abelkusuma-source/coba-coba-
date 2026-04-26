@@ -23,6 +23,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavDestination.Companion.hierarchy
@@ -33,10 +34,12 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.at.coba.data.DataStoreManager
 import com.at.coba.data.ThemeMode
+import com.at.coba.data.network.CookieManager
 import com.at.coba.ui.Screen
 import com.at.coba.ui.bottomNavItems
 import com.at.coba.ui.screens.*
 import com.at.coba.ui.theme.CobaTheme
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     private lateinit var dataStoreManager: DataStoreManager
@@ -45,6 +48,26 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         dataStoreManager = DataStoreManager(this)
         enableEdgeToEdge()
+
+        // Sinkronisasi DataStore ke CookieManager (In-memory cache untuk Interceptor)
+        lifecycleScope.launch {
+            val deviceId = dataStoreManager.getOrCreateDeviceId()
+            CookieManager.setDeviceId(deviceId)
+
+            launch {
+                dataStoreManager.authToken.collect { token ->
+                    CookieManager.setAuthToken(token)
+                }
+            }
+            launch {
+                dataStoreManager.cookies.collect { cookies ->
+                    CookieManager.setServerCookiesFromDataStore(cookies)
+                }
+            }
+            // Pastikan data lama (jika ada) dimigrasi ke sistem terpadu
+            dataStoreManager.migrateSessionCookieIntoUnifiedIfNeeded()
+        }
+
         setContent {
             val themeMode by dataStoreManager.themeMode.collectAsStateWithLifecycle(initialValue = ThemeMode.SYSTEM_DEFAULT)
             val authToken by dataStoreManager.authToken.collectAsStateWithLifecycle(initialValue = null)
