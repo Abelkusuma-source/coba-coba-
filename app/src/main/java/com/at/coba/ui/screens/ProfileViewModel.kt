@@ -9,7 +9,6 @@ import androidx.lifecycle.viewModelScope
 import com.at.coba.data.DataStoreManager
 import com.at.coba.data.ThemeMode
 import com.at.coba.data.network.ApiClient
-import com.at.coba.data.network.ChangePasswordRequest
 import com.at.coba.data.network.UpdateProfileRequest
 import com.at.coba.data.repository.UserProfileRepository
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -53,6 +52,18 @@ class ProfileViewModel(
     val userPhone: StateFlow<String?> = dataStoreManager.userPhone
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
+    val userNickname: StateFlow<String?> = dataStoreManager.userNickname
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    val isEmailVerified: StateFlow<Boolean> = dataStoreManager.isEmailVerified
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val isPhoneVerified: StateFlow<Boolean> = dataStoreManager.isPhoneVerified
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val isDocsVerified: StateFlow<Boolean> = dataStoreManager.isDocsVerified
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
     init {
         refreshProfile()
     }
@@ -79,24 +90,22 @@ class ProfileViewModel(
         }
     }
 
-    fun changePassword(current: String, new: String, confirm: String) {
-        if (new != confirm) {
-            viewModelScope.launch { _message.emit("Passwords do not match") }
-            return
-        }
+    fun updateNickname(nickname: String) {
         viewModelScope.launch {
             _uiState.value = ProfileUiState.Loading
             try {
                 val apiService = ApiClient.getApiService(getApplication())
-                apiService.changePassword(ChangePasswordRequest(current, new, confirm))
-                _message.emit("Password changed successfully")
+                apiService.updateProfile(UpdateProfileRequest(nickname = nickname))
+                dataStoreManager.setUserProfileInfo(null, null, nickname = nickname)
+                _message.emit("Nickname updated successfully")
                 _uiState.value = ProfileUiState.Idle
             } catch (e: Exception) {
-                _message.emit("Password change failed: ${e.message}")
+                _message.emit("Update failed: ${e.message}")
                 _uiState.value = ProfileUiState.Idle
             }
         }
     }
+
 
     fun onImageSelected(uri: Uri?) {
         viewModelScope.launch {

@@ -46,7 +46,6 @@ class MainActivity : ComponentActivity() {
         dataStoreManager = DataStoreManager(this)
         enableEdgeToEdge()
         setContent {
-            // Task 1.c: Gunakan collectAsStateWithLifecycle()
             val themeMode by dataStoreManager.themeMode.collectAsStateWithLifecycle(initialValue = ThemeMode.SYSTEM_DEFAULT)
             val authToken by dataStoreManager.authToken.collectAsStateWithLifecycle(initialValue = null)
             val hasUserAgreed by dataStoreManager.hasUserAgreed.collectAsStateWithLifecycle(initialValue = null)
@@ -70,9 +69,7 @@ class MainActivity : ComponentActivity() {
                             )
                             LoginScreen(
                                 viewModel = loginViewModel,
-                                onLoginSuccess = { _ ->
-                                    // Navigasi akan dipicu oleh perubahan authToken di state
-                                }
+                                onLoginSuccess = { _ -> }
                             )
                         }
                         !hasUserAgreed!! -> UserAgreementScreen(dataStoreManager) { }
@@ -134,10 +131,7 @@ fun MainScreen(dataStoreManager: DataStoreManager) {
                 navigationIcon = {
                     if (!isTopLevelDestination && currentDestination != null) {
                         IconButton(onClick = { navController.navigateUp() }) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowBack, 
-                                contentDescription = "Back" // Task 1.b
-                            )
+                            Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                         }
                     }
                 },
@@ -152,10 +146,7 @@ fun MainScreen(dataStoreManager: DataStoreManager) {
                                 restoreState = true
                             }
                         }) {
-                            Icon(
-                                imageVector = Icons.Default.BugReport, 
-                                contentDescription = "Debug" // Task 1.b
-                            )
+                            Icon(imageVector = Icons.Default.BugReport, contentDescription = "Debug")
                         }
                     }
                 }
@@ -168,10 +159,7 @@ fun MainScreen(dataStoreManager: DataStoreManager) {
                     NavigationBarItem(
                         icon = { 
                             screen.icon?.let {
-                                Icon(
-                                    imageVector = it, 
-                                    contentDescription = screen.title
-                                )
+                                Icon(imageVector = it, contentDescription = screen.title)
                             }
                         },
                         label = { Text(screen.title) },
@@ -200,43 +188,42 @@ fun MainScreen(dataStoreManager: DataStoreManager) {
             popExitTransition = { slideOutHorizontally { it } + fadeOut() }
         ) {
             composable(Screen.Trade.route) { 
-                val tradeViewModel: TradeViewModel = viewModel(
-                    factory = TradeViewModel.Factory(dataStoreManager)
-                )
+                val tradeViewModel: TradeViewModel = viewModel(factory = TradeViewModel.Factory(dataStoreManager))
                 TradeScreen(tradeViewModel)
             }
             composable(Screen.History.route) { HistoryScreen() }
             composable(Screen.Web.route) { WebScreen() }
             composable(Screen.Profile.route) { 
-                // Task 2.d: Hubungkan ViewModel ke UI
                 val profileViewModel: ProfileViewModel = viewModel(
-                    factory = ProfileViewModel.Factory(
-                        LocalContext.current.applicationContext as Application,
-                        dataStoreManager
-                    )
+                    factory = ProfileViewModel.Factory(LocalContext.current.applicationContext as Application, dataStoreManager)
                 )
                 val currentThemeMode by profileViewModel.themeMode.collectAsStateWithLifecycle()
                 val profileImageUri by profileViewModel.profileImageUri.collectAsStateWithLifecycle()
                 val userEmail by profileViewModel.userEmail.collectAsStateWithLifecycle()
                 val userPhone by profileViewModel.userPhone.collectAsStateWithLifecycle()
+                val userNickname by profileViewModel.userNickname.collectAsStateWithLifecycle()
+                val isEmailVerified by profileViewModel.isEmailVerified.collectAsStateWithLifecycle()
+                val isPhoneVerified by profileViewModel.isPhoneVerified.collectAsStateWithLifecycle()
+                val isDocsVerified by profileViewModel.isDocsVerified.collectAsStateWithLifecycle()
                 val uiState by profileViewModel.uiState.collectAsStateWithLifecycle()
 
-                // Akses TradeViewModel untuk performLogout
-                val tradeViewModel: TradeViewModel = viewModel(
-                    factory = TradeViewModel.Factory(dataStoreManager)
-                )
+                val tradeViewModel: TradeViewModel = viewModel(factory = TradeViewModel.Factory(dataStoreManager))
 
                 ProfileScreen(
                     themeMode = currentThemeMode,
                     profileImageUri = profileImageUri,
                     userEmail = userEmail,
                     userPhone = userPhone,
+                    userNickname = userNickname,
+                    isEmailVerified = isEmailVerified,
+                    isPhoneVerified = isPhoneVerified,
+                    isDocsVerified = isDocsVerified,
                     uiState = uiState,
                     messageFlow = profileViewModel.message,
                     onProfileImagePicked = profileViewModel::onImageSelected,
                     onThemeSelected = profileViewModel::onThemeSelected,
                     onUpdatePhone = profileViewModel::updatePhone,
-                    onChangePassword = profileViewModel::changePassword,
+                    onUpdateNickname = profileViewModel::updateNickname,
                     onLogout = { tradeViewModel.performLogout() }
                 )
             }
