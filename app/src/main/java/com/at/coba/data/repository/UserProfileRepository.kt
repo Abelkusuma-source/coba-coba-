@@ -5,7 +5,6 @@ import android.net.Uri
 import com.at.coba.data.DataStoreManager
 import com.at.coba.data.network.ApiClient
 import com.at.coba.data.network.LoginData
-import com.at.coba.data.network.ProfileResponse
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
@@ -15,16 +14,6 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.asRequestBody
 import java.io.File
 
-/**
- * Syncs profile imagery with account identity.
- *
- * - After login: if the API returns avatar URLs on [LoginData], downloads with the authenticated
- *   OkHttp client and caches to internal storage (same file as gallery flow).
- * - After local pick: attempts multipart upload when [ApiService.uploadProfileAvatar] is implemented
- *   on the backend; on failure the local file from [DataStoreManager.persistProfileImageFromPicker] remains.
- *
- * Adjust [com.at.coba.data.network.ApiService] paths when backend contract is confirmed.
- */
 object UserProfileRepository {
 
     suspend fun syncAfterLogin(appContext: Context, loginData: LoginData) {
@@ -36,7 +25,7 @@ object UserProfileRepository {
         }
         dm.setUserId(newId)
 
-        // Trigger full profile fetch to get email/phone/avatar
+        // Trigger full profile fetch to get email/phone/avatar/verification
         fetchAndSyncFullProfile(appContext)
 
         val remoteUrl = listOf(
@@ -57,9 +46,16 @@ object UserProfileRepository {
             val profile = apiService.getProfile()
             val dm = DataStoreManager(context.applicationContext)
             
-            dm.setUserProfileInfo(profile.data.email, profile.data.phone)
+            dm.setUserProfileInfo(
+                email = profile.data.email,
+                phone = profile.data.phone,
+                nickname = profile.data.nickname ?: profile.data.firstName,
+                emailVerified = profile.data.emailVerified,
+                phoneVerified = profile.data.phoneVerified,
+                docsVerified = profile.data.docsVerified
+            )
             
-            profile.data.avatarUrl?.let {
+            profile.data.avatar?.let {
                 val resolved = resolveAvatarUrl(it)
                 cacheAvatarFromRemoteUrl(context, resolved)
             }
@@ -100,10 +96,6 @@ object UserProfileRepository {
         }
     }
 
-    /**
-     * Uploads the cached internal profile file. Succeeds only if the backend exposes the multipart route.
-     * On success, stores the returned HTTPS URL as the display source.
-     */
     suspend fun uploadCachedProfileAvatar(appContext: Context): Result<String> = withContext(Dispatchers.IO) {
         val ctx = appContext.applicationContext
         val dm = DataStoreManager(ctx)

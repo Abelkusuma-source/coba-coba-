@@ -58,6 +58,10 @@ class DataStoreManager(private val context: Context) {
         val USER_ID_KEY = stringPreferencesKey("user_id")
         val USER_EMAIL_KEY = stringPreferencesKey("user_email")
         val USER_PHONE_KEY = stringPreferencesKey("user_phone")
+        val USER_NICKNAME_KEY = stringPreferencesKey("user_nickname")
+        val USER_EMAIL_VERIFIED_KEY = booleanPreferencesKey("user_email_verified")
+        val USER_PHONE_VERIFIED_KEY = booleanPreferencesKey("user_phone_verified")
+        val USER_DOCS_VERIFIED_KEY = booleanPreferencesKey("user_docs_verified")
 
         /** Internal file name after copying picker content into app storage. */
         const val PROFILE_IMAGE_INTERNAL_FILE = "profile_image.jpg"
@@ -182,6 +186,10 @@ class DataStoreManager(private val context: Context) {
 
     val userEmail: Flow<String?> = dataStore.data.map { it[USER_EMAIL_KEY] }
     val userPhone: Flow<String?> = dataStore.data.map { it[USER_PHONE_KEY] }
+    val userNickname: Flow<String?> = dataStore.data.map { it[USER_NICKNAME_KEY] }
+    val isEmailVerified: Flow<Boolean> = dataStore.data.map { it[USER_EMAIL_VERIFIED_KEY] ?: false }
+    val isPhoneVerified: Flow<Boolean> = dataStore.data.map { it[USER_PHONE_VERIFIED_KEY] ?: false }
+    val isDocsVerified: Flow<Boolean> = dataStore.data.map { it[USER_DOCS_VERIFIED_KEY] ?: false }
 
     suspend fun getStoredUserId(): String? = dataStore.data.map { it[USER_ID_KEY] }.first()
 
@@ -191,10 +199,21 @@ class DataStoreManager(private val context: Context) {
         }
     }
 
-    suspend fun setUserProfileInfo(email: String?, phone: String?) {
+    suspend fun setUserProfileInfo(
+        email: String?,
+        phone: String?,
+        nickname: String? = null,
+        emailVerified: Boolean? = null,
+        phoneVerified: Boolean? = null,
+        docsVerified: Boolean? = null
+    ) {
         dataStore.edit { preferences ->
             if (email != null) preferences[USER_EMAIL_KEY] = email
             if (phone != null) preferences[USER_PHONE_KEY] = phone
+            if (nickname != null) preferences[USER_NICKNAME_KEY] = nickname
+            if (emailVerified != null) preferences[USER_EMAIL_VERIFIED_KEY] = emailVerified
+            if (phoneVerified != null) preferences[USER_PHONE_VERIFIED_KEY] = phoneVerified
+            if (docsVerified != null) preferences[USER_DOCS_VERIFIED_KEY] = docsVerified
         }
     }
 

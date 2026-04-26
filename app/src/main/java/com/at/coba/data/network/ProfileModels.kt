@@ -7,24 +7,25 @@ data class ProfileResponse(
 )
 
 data class ProfileData(
-    val id: String,
+    val id: Long,
     val email: String,
     val phone: String?,
-    @SerializedName("avatar_url") val avatarUrl: String?,
+    val nickname: String?,
+    val gender: String?,
+    val country: String?,
     @SerializedName("first_name") val firstName: String?,
-    @SerializedName("last_name") val lastName: String?
+    @SerializedName("last_name") val lastName: String?,
+    @SerializedName("email_verified") val emailVerified: Boolean,
+    @SerializedName("phone_verified") val phoneVerified: Boolean,
+    @SerializedName("docs_verified") val docsVerified: Boolean,
+    val avatar: String?
 )
 
 data class UpdateProfileRequest(
     val phone: String? = null,
+    val nickname: String? = null,
     @SerializedName("first_name") val firstName: String? = null,
     @SerializedName("last_name") val lastName: String? = null
-)
-
-data class ChangePasswordRequest(
-    @SerializedName("current_password") val currentPassword: String,
-    @SerializedName("password") val password: String,
-    @SerializedName("password_confirmation") val passwordConfirmation: String
 )
 
 data class GenericResponse(

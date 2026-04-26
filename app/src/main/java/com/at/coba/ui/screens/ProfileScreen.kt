@@ -6,7 +6,17 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -14,26 +24,34 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
-import com.at.coba.R
+import coil.request.ImageRequest
 import com.at.coba.data.ThemeMode
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.collectLatest
+
+// Skema warna biru muda sesuai referensi gambar
+val LightBlueButton = Color(0xFFD1E9FF)
+val LightPurpleText = Color(0xFFB8B1E0) // Warna teks Simpan yang agak keunguan
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -42,30 +60,29 @@ fun ProfileScreen(
     profileImageUri: String?,
     userEmail: String?,
     userPhone: String?,
+    userNickname: String?,
+    isEmailVerified: Boolean,
+    isPhoneVerified: Boolean,
+    isDocsVerified: Boolean,
     uiState: ProfileViewModel.ProfileUiState,
     messageFlow: SharedFlow<String>,
     onProfileImagePicked: (Uri?) -> Unit,
     onThemeSelected: (ThemeMode) -> Unit,
     onUpdatePhone: (String) -> Unit,
-    onChangePassword: (String, String, String) -> Unit,
+    onUpdateNickname: (String) -> Unit,
     onLogout: () -> Unit
 ) {
-    val lightBlueButton = Color(0xFFD1E9FF)
-    
     var expanded by remember { mutableStateOf(false) }
     var showLogoutDialog by remember { mutableStateOf(false) }
     
     val snackbarHostState = remember { SnackbarHostState() }
     val scrollState = rememberScrollState()
+    val context = LocalContext.current
 
     // Form states
     var phone by remember(userPhone) { mutableStateOf(userPhone ?: "") }
-    var currentPassword by remember { mutableStateOf("") }
-    var newPassword by remember { mutableStateOf("") }
-    var confirmPassword by remember { mutableStateOf("") }
+    var nickname by remember(userNickname) { mutableStateOf(userNickname ?: "") }
     
-    var passwordVisible by remember { mutableStateOf(false) }
-
     LaunchedEffect(messageFlow) {
         messageFlow.collectLatest { msg ->
             snackbarHostState.showSnackbar(msg)
@@ -124,11 +141,13 @@ fun ProfileScreen(
                         Icon(Icons.Default.Person, null, Modifier.size(80.dp), MaterialTheme.colorScheme.primary)
                     } else {
                         AsyncImage(
-                            model = profileImageUri,
+                            model = ImageRequest.Builder(context)
+                                .data(profileImageUri)
+                                .crossfade(true)
+                                .build(),
                             contentDescription = null,
                             modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop,
-                            error = rememberVectorPainter(Icons.Default.Person)
+                            contentScale = ContentScale.Crop
                         )
                     }
                 }
@@ -147,6 +166,70 @@ fun ProfileScreen(
                 }
             }
 
+            // Status Verifikasi
+            Surface(
+                color = if (isDocsVerified) Color(0xFFE8F5E9) else Color(0xFFFFF3E0),
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.padding(bottom = 24.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        if (isDocsVerified) Icons.Default.CheckCircle else Icons.Default.Person,
+                        null,
+                        modifier = Modifier.size(16.dp),
+                        tint = if (isDocsVerified) Color(0xFF2E7D32) else Color(0xFFEF6C00)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        if (isDocsVerified) "Akun Terverifikasi" else "Akun Belum Terverifikasi",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = if (isDocsVerified) Color(0xFF2E7D32) else Color(0xFFEF6C00),
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            // Nama Panggilan Section
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Text("Nama panggilan", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(12.dp))
+                
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedTextField(
+                        value = nickname,
+                        onValueChange = { nickname = it },
+                        label = { Text("Nama panggilan") },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant
+                        )
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Button(
+                        onClick = { onUpdateNickname(nickname) },
+                        enabled = uiState is ProfileViewModel.ProfileUiState.Idle,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.height(56.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = LightBlueButton,
+                            contentColor = LightPurpleText
+                        )
+                    ) {
+                        Text("Simpan", fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
             // Kontak Section
             Column(modifier = Modifier.fillMaxWidth()) {
                 Text("Kontak", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
@@ -163,6 +246,11 @@ fun ProfileScreen(
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(12.dp),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                        trailingIcon = {
+                            if (isPhoneVerified) {
+                                Icon(Icons.Default.CheckCircle, null, tint = Color(0xFF4CAF50), modifier = Modifier.size(20.dp))
+                            }
+                        },
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = MaterialTheme.colorScheme.primary,
                             unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant
@@ -175,8 +263,8 @@ fun ProfileScreen(
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.height(56.dp),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = lightBlueButton,
-                            contentColor = MaterialTheme.colorScheme.primary
+                            containerColor = LightBlueButton,
+                            contentColor = LightPurpleText
                         )
                     ) {
                         Text("Simpan", fontWeight = FontWeight.Bold)
@@ -195,7 +283,7 @@ fun ProfileScreen(
                         Icon(
                             Icons.Default.CheckCircle, 
                             null, 
-                            tint = if (userEmail != null) MaterialTheme.colorScheme.primary else Color.Gray,
+                            tint = if (isEmailVerified) Color(0xFF4CAF50) else Color.Gray,
                             modifier = Modifier.size(20.dp)
                         ) 
                     },
@@ -210,70 +298,6 @@ fun ProfileScreen(
             }
 
             Spacer(modifier = Modifier.height(32.dp))
-
-            // Ubah Kata Sandi Section
-            Column(modifier = Modifier.fillMaxWidth()) {
-                Text("Ubah kata sandi", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.height(16.dp))
-
-                OutlinedTextField(
-                    value = currentPassword,
-                    onValueChange = { currentPassword = it },
-                    label = { Text("Kata sandi saat ini") },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                    trailingIcon = {
-                        IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                            Icon(if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff, null)
-                        }
-                    }
-                )
-                
-                Spacer(modifier = Modifier.height(16.dp))
-
-                OutlinedTextField(
-                    value = newPassword,
-                    onValueChange = { newPassword = it },
-                    label = { Text("Kata sandi baru") },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    visualTransformation = PasswordVisualTransformation()
-                )
-                Text(
-                    text = "8-64 karakter. Huruf latin, angka, dan simbol khusus.",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp, start = 8.dp)
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                OutlinedTextField(
-                    value = confirmPassword,
-                    onValueChange = { confirmPassword = it },
-                    label = { Text("Masukkan kata sandi sekali lagi") },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    visualTransformation = PasswordVisualTransformation()
-                )
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                Button(
-                    onClick = { onChangePassword(currentPassword, newPassword, confirmPassword) },
-                    modifier = Modifier.fillMaxWidth().height(52.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = lightBlueButton,
-                        contentColor = MaterialTheme.colorScheme.primary
-                    )
-                ) {
-                    Text("Simpan", fontWeight = FontWeight.Bold)
-                }
-            }
-
-            Spacer(modifier = Modifier.height(40.dp))
 
             // Theme Selection
             Card(
@@ -302,13 +326,8 @@ fun ProfileScreen(
                         )
                         ExposedDropdownMenu(expanded, { expanded = false }) {
                             ThemeMode.entries.forEach { mode ->
-                                val labelText = when(mode) {
-                                    ThemeMode.LIGHT -> "Terang"
-                                    ThemeMode.DARK -> "Gelap"
-                                    else -> "Ikuti Sistem"
-                                }
                                 DropdownMenuItem(
-                                    text = { Text(labelText) },
+                                    text = { Text(mode.name) },
                                     onClick = { onThemeSelected(mode); expanded = false }
                                 )
                             }

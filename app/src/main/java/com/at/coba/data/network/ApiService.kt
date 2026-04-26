@@ -25,7 +25,4 @@ interface ApiService {
 
     @POST("/passport/v1/profile/update")
     suspend fun updateProfile(@Body request: UpdateProfileRequest): ProfileResponse
-
-    @POST("/passport/v1/profile/change_password")
-    suspend fun changePassword(@Body request: ChangePasswordRequest): GenericResponse
 }
