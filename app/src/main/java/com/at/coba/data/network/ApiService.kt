@@ -20,7 +20,7 @@ interface ApiService {
     @POST("/passport/v1/profile/avatar")
     suspend fun uploadProfileAvatar(@Part avatar: MultipartBody.Part): AvatarUploadResponse
 
-    @retrofit2.http.GET("/passport/v1/profile")
+    @retrofit2.http.GET("/passport/v3/profile?locale=id")
     suspend fun getProfile(): ProfileResponse
 
     @POST("/passport/v1/profile/update")
