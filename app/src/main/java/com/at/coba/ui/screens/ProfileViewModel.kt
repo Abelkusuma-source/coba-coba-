@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -65,12 +66,36 @@ class ProfileViewModel(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     init {
-        refreshProfile()
+        viewModelScope.launch {
+            // Cek apakah data di DataStore sudah ada
+            val currentEmail = dataStoreManager.userEmail.first()
+            val currentNickname = dataStoreManager.userNickname.first()
+
+            if (currentEmail.isNullOrBlank() || currentNickname.isNullOrBlank()) {
+                // TAMPILKAN EMPTY SKELETON jika data dasar belum ada
+                _uiState.value = ProfileUiState.Loading
+            }
+
+            try {
+                // Jalankan Fetch OKHTTP via Repository
+                UserProfileRepository.fetchAndSyncFullProfile(getApplication())
+            } catch (_: Exception) {
+                // Error handled inside repository or silently for now
+            } finally {
+                // Selesai loading, tampilkan data yang ada (baik dari cache atau fetch baru)
+                _uiState.value = ProfileUiState.Idle
+            }
+        }
     }
 
     fun refreshProfile() {
         viewModelScope.launch {
-            UserProfileRepository.fetchAndSyncFullProfile(getApplication())
+            _uiState.value = ProfileUiState.Loading
+            try {
+                UserProfileRepository.fetchAndSyncFullProfile(getApplication())
+            } finally {
+                _uiState.value = ProfileUiState.Idle
+            }
         }
     }
 
