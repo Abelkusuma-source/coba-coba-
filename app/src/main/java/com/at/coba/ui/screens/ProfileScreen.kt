@@ -18,15 +18,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.ExperimentalMaterialApi
-import androidx.compose.material.pullrefresh.PullRefreshIndicator
-import androidx.compose.material.pullrefresh.pullRefresh
-import androidx.compose.material.pullrefresh.rememberPullRefreshState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -128,11 +126,12 @@ fun ProfileScreen(
                 )
             }
             ProfileViewModel.ProfileUiState.Idle -> {
-                Box(
+                PullToRefreshBox(
+                    isRefreshing = isPullRefreshing,
+                    onRefresh = onPullRefresh,
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(padding)
-                        .pullRefresh(pullRefreshState)
                 ) {
                     Column(
                         modifier = Modifier
@@ -142,177 +141,172 @@ fun ProfileScreen(
                             .padding(16.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                    // Avatar — hanya tampilan (sinkron dari server)
-                    Box(
-                        modifier = Modifier.padding(bottom = 32.dp, top = 16.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
+                        // Avatar — hanya tampilan (sinkron dari server)
                         Box(
-                            modifier = Modifier
-                                .size(130.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.surfaceVariant)
-                                .border(
-                                    3.dp,
-                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
-                                    CircleShape
-                                ),
+                            modifier = Modifier.padding(bottom = 32.dp, top = 16.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            if (avatarDisplayUrl.isNullOrBlank()) {
-                                Icon(
-                                    Icons.Default.Person,
-                                    null,
-                                    Modifier.size(80.dp),
-                                    MaterialTheme.colorScheme.primary
-                                )
-                            } else {
-                                val epoch = avatarCacheEpoch
-                                val req = remember(avatarDisplayUrl, epoch) {
-                                    ImageRequest.Builder(context)
-                                        .data(avatarDisplayUrl)
-                                        .memoryCacheKey(
-                                            MemoryCache.Key("stockity_avatar_${epoch}_${avatarDisplayUrl.orEmpty()}")
-                                        )
-                                        .diskCacheKey("stockity_avatar_${epoch}_${avatarDisplayUrl.orEmpty()}")
-                                        .crossfade(true)
-                                        .build()
+                            Box(
+                                modifier = Modifier
+                                    .size(130.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                                    .border(
+                                        3.dp,
+                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
+                                        CircleShape
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (avatarDisplayUrl.isNullOrBlank()) {
+                                    Icon(
+                                        Icons.Default.Person,
+                                        null,
+                                        Modifier.size(80.dp),
+                                        MaterialTheme.colorScheme.primary
+                                    )
+                                } else {
+                                    val epoch = avatarCacheEpoch
+                                    val req = remember(avatarDisplayUrl, epoch) {
+                                        ImageRequest.Builder(context)
+                                            .data(avatarDisplayUrl)
+                                            .memoryCacheKey(
+                                                MemoryCache.Key("stockity_avatar_${epoch}_${avatarDisplayUrl.orEmpty()}")
+                                            )
+                                            .diskCacheKey("stockity_avatar_${epoch}_${avatarDisplayUrl.orEmpty()}")
+                                            .crossfade(true)
+                                            .build()
+                                    }
+                                    AsyncImage(
+                                        model = req,
+                                        contentDescription = null,
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentScale = ContentScale.Crop
+                                    )
                                 }
-                                AsyncImage(
-                                    model = req,
-                                    contentDescription = null,
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = ContentScale.Crop
+                            }
+                        }
+
+                        Surface(
+                            color = if (isDocsVerified) Color(0xFFE8F5E9) else Color(0xFFFFF3E0),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 24.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    if (isDocsVerified) Icons.Default.CheckCircle else Icons.Default.Person,
+                                    null,
+                                    modifier = Modifier.size(18.dp),
+                                    tint = if (isDocsVerified) Color(0xFF2E7D32) else Color(0xFFEF6C00)
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    if (isDocsVerified) "Akun Terverifikasi" else "Akun Belum Terverifikasi",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = if (isDocsVerified) Color(0xFF2E7D32) else Color(0xFFEF6C00),
+                                    fontWeight = FontWeight.Bold
                                 )
                             }
                         }
-                    }
 
-                    Surface(
-                        color = if (isDocsVerified) Color(0xFFE8F5E9) else Color(0xFFFFF3E0),
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 24.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+                            )
                         ) {
-                            Icon(
-                                if (isDocsVerified) Icons.Default.CheckCircle else Icons.Default.Person,
-                                null,
-                                modifier = Modifier.size(18.dp),
-                                tint = if (isDocsVerified) Color(0xFF2E7D32) else Color(0xFFEF6C00)
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            Text(
-                                if (isDocsVerified) "Akun Terverifikasi" else "Akun Belum Terverifikasi",
-                                style = MaterialTheme.typography.labelLarge,
-                                color = if (isDocsVerified) Color(0xFF2E7D32) else Color(0xFFEF6C00),
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
-                        )
-                    ) {
-                        Column(Modifier.padding(16.dp)) {
-                            Text(
-                                "Data akun",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Spacer(Modifier.height(16.dp))
-                            ProfileReadOnlyRow(
-                                label = "Nama panggilan",
-                                value = userNickname?.takeIf { it.isNotBlank() } ?: "—"
-                            )
-                            Spacer(Modifier.height(12.dp))
-                            ProfileReadOnlyRow(
-                                label = "Telepon",
-                                value = userPhone?.takeIf { it.isNotBlank() } ?: "—",
-                                verified = isPhoneVerified
-                            )
-                            Spacer(Modifier.height(12.dp))
-                            ProfileReadOnlyRow(
-                                label = "Email",
-                                value = userEmail?.takeIf { it.isNotBlank() } ?: "—",
-                                verified = isEmailVerified
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(24.dp))
-
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                        )
-                    ) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Text(
-                                "Pengaturan Tema",
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Spacer(modifier = Modifier.height(12.dp))
-                            ExposedDropdownMenuBox(
-                                expanded = expanded,
-                                onExpandedChange = { expanded = !expanded }
-                            ) {
-                                OutlinedTextField(
-                                    value = when (themeMode) {
-                                        ThemeMode.LIGHT -> "Terang"
-                                        ThemeMode.DARK -> "Gelap"
-                                        else -> "Ikuti Sistem"
-                                    },
-                                    onValueChange = {},
-                                    readOnly = true,
-                                    trailingIcon = {
-                                        ExposedDropdownMenuDefaults.TrailingIcon(expanded)
-                                    },
-                                    modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable, true).fillMaxWidth(),
-                                    shape = RoundedCornerShape(12.dp)
+                            Column(Modifier.padding(16.dp)) {
+                                Text(
+                                    "Data akun",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
                                 )
-                                ExposedDropdownMenu(expanded, { expanded = false }) {
-                                    ThemeMode.entries.forEach { mode ->
-                                        DropdownMenuItem(
-                                            text = { Text(mode.name) },
-                                            onClick = { onThemeSelected(mode); expanded = false }
-                                        )
+                                Spacer(Modifier.height(16.dp))
+                                ProfileReadOnlyRow(
+                                    label = "Nama panggilan",
+                                    value = userNickname?.takeIf { it.isNotBlank() } ?: "—"
+                                )
+                                Spacer(Modifier.height(12.dp))
+                                ProfileReadOnlyRow(
+                                    label = "Telepon",
+                                    value = userPhone?.takeIf { it.isNotBlank() } ?: "—",
+                                    verified = isPhoneVerified
+                                )
+                                Spacer(Modifier.height(12.dp))
+                                ProfileReadOnlyRow(
+                                    label = "Email",
+                                    value = userEmail?.takeIf { it.isNotBlank() } ?: "—",
+                                    verified = isEmailVerified
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(24.dp))
+
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                            )
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Text(
+                                    "Pengaturan Tema",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Spacer(modifier = Modifier.height(12.dp))
+                                ExposedDropdownMenuBox(
+                                    expanded = expanded,
+                                    onExpandedChange = { expanded = !expanded }
+                                ) {
+                                    OutlinedTextField(
+                                        value = when (themeMode) {
+                                            ThemeMode.LIGHT -> "Terang"
+                                            ThemeMode.DARK -> "Gelap"
+                                            else -> "Ikuti Sistem"
+                                        },
+                                        onValueChange = {},
+                                        readOnly = true,
+                                        trailingIcon = {
+                                            ExposedDropdownMenuDefaults.TrailingIcon(expanded)
+                                        },
+                                        modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable, true).fillMaxWidth(),
+                                        shape = RoundedCornerShape(12.dp)
+                                    )
+                                    ExposedDropdownMenu(expanded, { expanded = false }) {
+                                        ThemeMode.entries.forEach { mode ->
+                                            DropdownMenuItem(
+                                                text = { Text(mode.name) },
+                                                onClick = { onThemeSelected(mode); expanded = false }
+                                            )
+                                        }
                                     }
                                 }
                             }
                         }
-                    }
 
-                    Spacer(modifier = Modifier.height(32.dp))
+                        Spacer(modifier = Modifier.height(32.dp))
 
-                    Button(
-                        onClick = { showLogoutDialog = true },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.8f))
-                    ) {
-                        Icon(Icons.AutoMirrored.Filled.Logout, null)
-                        Spacer(Modifier.width(8.dp))
-                        Text("LOGOUT")
-                    }
+                        Button(
+                            onClick = { showLogoutDialog = true },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.8f))
+                        ) {
+                            Icon(Icons.AutoMirrored.Filled.Logout, null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("LOGOUT")
+                        }
 
-                    Spacer(modifier = Modifier.height(64.dp))
+                        Spacer(modifier = Modifier.height(64.dp))
                     }
-                    PullRefreshIndicator(
-                        refreshing = isPullRefreshing,
-                        state = pullRefreshState,
-                        modifier = Modifier.align(Alignment.TopCenter)
-                    )
                 }
             }
         }

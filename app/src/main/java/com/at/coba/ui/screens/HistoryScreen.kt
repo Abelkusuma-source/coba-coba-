@@ -4,10 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.ExperimentalMaterialApi
-import androidx.compose.material.pullrefresh.PullRefreshIndicator
-import androidx.compose.material.pullrefresh.pullRefresh
-import androidx.compose.material.pullrefresh.rememberPullRefreshState
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -114,16 +111,16 @@ fun HistoryScreen(viewModel: HistoryViewModel) {
             return@Column
         }
 
-        Box(
+        PullToRefreshBox(
+            isRefreshing = isPullRefreshing,
+            onRefresh = { viewModel.refreshFromPull() },
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
         ) {
             LazyColumn(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier
-                    .fillMaxSize()
-                    .pullRefresh(pullRefreshState)
+                modifier = Modifier.fillMaxSize()
             ) {
                 items(filteredItems, key = { it.id }) { item ->
                     HistoryCard(
@@ -135,18 +132,13 @@ fun HistoryScreen(viewModel: HistoryViewModel) {
                     )
                 }
             }
-            PullRefreshIndicator(
-                refreshing = isPullRefreshing,
-                state = pullRefreshState,
-                modifier = Modifier.align(Alignment.TopCenter)
-            )
         }
     }
 
     if (showBottomSheet && selectedItem != null) {
         ModalBottomSheet(
-            onDismissRequest = { 
-                showBottomSheet = false 
+            onDismissRequest = {
+                showBottomSheet = false
                 selectedItem = null
             },
             sheetState = sheetState
@@ -218,9 +210,9 @@ fun HistoryCard(item: HistoryItem, onClick: () -> Unit) {
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = item.type, 
-                            color = Color.White, 
-                            fontSize = 9.sp, 
+                            text = item.type,
+                            color = Color.White,
+                            fontSize = 9.sp,
                             fontWeight = FontWeight.Bold,
                             textAlign = TextAlign.Center,
                             style = TextStyle(
@@ -234,16 +226,16 @@ fun HistoryCard(item: HistoryItem, onClick: () -> Unit) {
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = item.accountMode, 
-                        style = MaterialTheme.typography.bodyMedium, 
-                        maxLines = 1, 
+                        text = item.accountMode,
+                        style = MaterialTheme.typography.bodyMedium,
+                        maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
 
                 Column(horizontalAlignment = Alignment.End) {
                     Text(
-                        text = "Amount: ${formatCurrency(item.amount, item.currency)}", 
+                        text = "Amount: ${formatCurrency(item.amount, item.currency)}",
                         style = MaterialTheme.typography.bodySmall
                     )
                     Text(
@@ -281,7 +273,7 @@ fun OrderDetailBottomSheetContent(item: HistoryItem) {
         Spacer(modifier = Modifier.height(24.dp))
 
         DetailRow(stringResource(R.string.pair), item.pair, MaterialTheme.colorScheme.primary)
-        
+
         Row(
             modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -296,9 +288,9 @@ fun OrderDetailBottomSheetContent(item: HistoryItem) {
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = item.type, 
-                    color = Color.White, 
-                    fontSize = 10.sp, 
+                    text = item.type,
+                    color = Color.White,
+                    fontSize = 10.sp,
                     fontWeight = FontWeight.Bold,
                     style = TextStyle(
                         platformStyle = PlatformTextStyle(includeFontPadding = false),
