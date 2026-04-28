@@ -46,8 +46,10 @@ class LoginViewModel(private val dataStoreManager: DataStoreManager) : ViewModel
                 val apiService = ApiClient.getApiService(context)
                 val response = apiService.login(LoginRequest(email, password))
                 
-                // Simpan data ke DataStore
-                dataStoreManager.setAuthToken(response.data.authtoken)
+                // Simpan data ke DataStore + Update Cache Instan untuk Interceptor
+                val token = response.data.authtoken
+                CookieManager.setAuthToken(token)
+                dataStoreManager.setAuthToken(token)
                 dataStoreManager.setIs2FAEnabled(response.data.is_2fa_enabled)
 
                 UserProfileRepository.syncAfterLogin(context.applicationContext, response.data)
@@ -109,8 +111,10 @@ class LoginViewModel(private val dataStoreManager: DataStoreManager) : ViewModel
                     )
                 )
 
-                // STEP 3: Save authtoken & navigate
-                dataStoreManager.setAuthToken(loginResponse.data.authtoken)
+                // STEP 3: Save authtoken & navigate + Update Cache Instan
+                val token = loginResponse.data.authtoken
+                CookieManager.setAuthToken(token)
+                dataStoreManager.setAuthToken(token)
                 dataStoreManager.setIs2FAEnabled(loginResponse.data.is_2fa_enabled)
 
                 UserProfileRepository.syncAfterLogin(context.applicationContext, loginResponse.data)

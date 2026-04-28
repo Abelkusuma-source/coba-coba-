@@ -88,27 +88,14 @@ class ProfileViewModel(
 
     init {
         viewModelScope.launch {
-            if (hasCachedProfile()) {
-                _uiState.value = ProfileUiState.Idle
-                when (UserProfileRepository.fetchAndSyncFullProfile(getApplication())) {
-                    is ProfileFetchResult.Failure -> { }
-                    is ProfileFetchResult.Success -> { }
-                }
-            } else {
-                _uiState.value = ProfileUiState.Loading
-                when (
-                    val result = UserProfileRepository.fetchAndSyncFullProfile(getApplication())
-                ) {
-                    is ProfileFetchResult.Success -> _uiState.value = ProfileUiState.Idle
-                    is ProfileFetchResult.Failure -> {
-                        val shown = buildUserFacingError(
-                            result.httpCode,
-                            result.message ?: "Gagal memuat profil"
-                        )
-                        _uiState.value = ProfileUiState.LoadError(shown)
-                    }
-                }
+            // Cek apakah data profil sudah ada di memori
+            val email = dataStoreManager.userEmail.first()
+            if (email.isNullOrBlank()) {
+                _uiState.value = ProfileUiState.Loading // Tampilkan Skeleton
             }
+
+            // Selalu tarik data terbaru dari server
+            refreshProfile()
         }
     }
 
@@ -139,9 +126,15 @@ class ProfileViewModel(
                         result.httpCode,
                         result.message ?: "Gagal memperbarui profil"
                     )
-                    _message.emit(shown)
+                    if (_uiState.value == ProfileUiState.Loading) {
+                        _uiState.value = ProfileUiState.LoadError(shown)
+                    } else {
+                        _message.emit(shown)
+                    }
                 }
-                is ProfileFetchResult.Success -> { }
+                is ProfileFetchResult.Success -> {
+                    _uiState.value = ProfileUiState.Idle
+                }
             }
         }
     }

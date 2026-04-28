@@ -308,6 +308,9 @@ class DataStoreManager(private val context: Context) {
             preferences.remove(LEGACY_SESSION_COOKIE_KEY)
             preferences.remove(IS_2FA_ENABLED_KEY)
             preferences.remove(USER_ID_KEY)
+            preferences.remove(USER_EMAIL_KEY)
+            preferences.remove(USER_NICKNAME_KEY)
+            preferences.remove(USER_PHONE_KEY)
         }
     }
 

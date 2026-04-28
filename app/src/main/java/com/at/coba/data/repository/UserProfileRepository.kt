@@ -55,6 +55,8 @@ object UserProfileRepository {
             val profile = apiService.getProfile()
             val dm = DataStoreManager(context.applicationContext)
 
+            android.util.Log.d("UserProfileRepo", "Fetch Success: ${profile.data.email}")
+
             dm.setUserProfileInfo(
                 email = profile.data.email,
                 phone = profile.data.phone,
@@ -63,7 +65,8 @@ object UserProfileRepository {
                 phoneVerified = profile.data.phoneVerified,
                 docsVerified = profile.data.docsVerified
             )
-
+            
+            // ... rest of logic
             val avatarRaw = profile.data.avatar?.trim().orEmpty()
             if (avatarRaw.isEmpty()) {
                 dm.setProfileRemoteAvatarUrl(null)
@@ -73,8 +76,10 @@ object UserProfileRepository {
             }
             ProfileFetchResult.Success
         } catch (e: HttpException) {
+            android.util.Log.e("UserProfileRepo", "Http Error ${e.code()}: ${e.message()} | Body: ${e.response()?.errorBody()?.string()}")
             ProfileFetchResult.Failure(e.code(), e.message())
         } catch (e: Exception) {
+            android.util.Log.e("UserProfileRepo", "Generic Error: ${e.message}", e)
             ProfileFetchResult.Failure(null, e.message ?: e.toString())
         }
     }

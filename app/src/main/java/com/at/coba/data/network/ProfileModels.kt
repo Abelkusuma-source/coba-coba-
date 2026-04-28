@@ -7,18 +7,18 @@ data class ProfileResponse(
 )
 
 data class ProfileData(
-    val id: Long,
-    val email: String,
-    val phone: String?,
-    val nickname: String?,
-    val gender: String?,
-    val country: String?,
-    @SerializedName("first_name") val firstName: String?,
-    @SerializedName("last_name") val lastName: String?,
-    @SerializedName("email_verified") val emailVerified: Boolean,
-    @SerializedName("phone_verified") val phoneVerified: Boolean,
-    @SerializedName("docs_verified") val docsVerified: Boolean,
-    val avatar: String?
+    val id: Long = 0,
+    val email: String = "",
+    val phone: String? = null,
+    val nickname: String? = null,
+    val gender: String? = null,
+    val country: String? = null,
+    @SerializedName("first_name") val firstName: String? = null,
+    @SerializedName("last_name") val lastName: String? = null,
+    @SerializedName("email_verified") val emailVerified: Boolean = false,
+    @SerializedName("phone_verified") val phoneVerified: Boolean = false,
+    @SerializedName("docs_verified") val docsVerified: Boolean = false,
+    val avatar: String? = null
 )
 
 data class UpdateProfileRequest(

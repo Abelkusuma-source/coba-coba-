@@ -35,7 +35,21 @@ object CookieManager {
     }
 
     fun getDeviceId(): String = deviceId
+
     fun getAuthToken(): String? = authToken
+
+    /** Trim; jalur private API mengharapkan token mentah di header `Authorization-Token` (tanpa prefix `Bearer `). */
+    fun getDeviceIdForHeader(): String = deviceId.trim()
+
+    fun getAuthorizationTokenForHeader(): String? {
+        val t = authToken ?: return null
+        var s = t.trim()
+        if (s.startsWith("Bearer ", ignoreCase = true)) {
+            s = s.substring(7).trim()
+        }
+        return s.takeIf { it.isNotEmpty() }
+    }
+
     fun getServerCookiesForOkHttpOnly(): String = synchronized(lock) { serverCookiesRaw }
 
     /**
@@ -107,28 +121,35 @@ object CookieManager {
      * OkHttp [CookieJar.loadForRequest] — in-memory only, no I/O.
      */
     fun cookiesForHttpUrl(url: HttpUrl): List<Cookie> {
-        val header = getServerCookiesForOkHttpOnly()
-        if (header.isEmpty()) return emptyList()
         val host = url.host
-        return header.split(';')
-            .map { it.trim() }
-            .filter { it.isNotEmpty() }
-            .mapNotNull { part ->
-                val p = part.split('=', limit = 2)
-                if (p.size != 2) return@mapNotNull null
-                val name = p[0].trim()
-                val value = p[1].trim()
-                if (name.isEmpty()) return@mapNotNull null
-                try {
-                    Cookie.Builder()
-                        .name(name)
-                        .value(value)
-                        .domain(host)
-                        .build()
-                } catch (_: Exception) {
-                    null
-                }
+        val header = getServerCookiesForOkHttpOnly()
+        
+        // Gabungkan Server Cookies dengan data identitas agar CookieJar mengirim lengkap
+        val map = parseCookieStringToMap(header)
+        if (deviceId.isNotEmpty()) {
+            map[DEVICE_ID_KEY] = deviceId
+        }
+        map[DEVICE_TYPE_KEY] = DataStoreManager.DEVICE_TYPE
+        
+        val t = authToken
+        if (!t.isNullOrEmpty()) {
+            map[AUTH_TOKEN_KEY] = t
+            map[ALT_TOKEN_KEY] = t
+        }
+
+        if (map.isEmpty()) return emptyList()
+
+        return map.entries.mapNotNull { (name, value) ->
+            try {
+                Cookie.Builder()
+                    .name(name)
+                    .value(value)
+                    .domain(host)
+                    .build()
+            } catch (_: Exception) {
+                null
             }
+        }
     }
 
     private fun mapToHeaderString(map: Map<String, String>): String =
@@ -156,7 +177,7 @@ object CookieManager {
 
     /** Same UA string as [AuthInterceptor] for REST/Web parity. */
     const val STOCKITY_USER_AGENT =
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36"
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
 
     /**
      * Applies the same auth-related headers as API calls ([AuthInterceptor]): Cookie, Device-Id,
@@ -165,12 +186,11 @@ object CookieManager {
     fun applyStockitySocketRequestHeaders(builder: Request.Builder, deviceId: String): Request.Builder {
         var b = builder
             .header("Cookie", getCookieHeader())
-            .header("Device-Id", deviceId)
+            .header("Device-Id", deviceId.trim())
             .header("Device-Type", DataStoreManager.DEVICE_TYPE)
             .header("User-Agent", STOCKITY_USER_AGENT)
-        val t = getAuthToken()
-        if (!t.isNullOrEmpty()) {
-            b = b.header("Authorization-Token", t)
+        getAuthorizationTokenForHeader()?.let { token ->
+            b = b.header("Authorization-Token", token)
         }
         return b
     }
