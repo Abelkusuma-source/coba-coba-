@@ -214,7 +214,12 @@ fun MainScreen(dataStoreManager: DataStoreManager) {
                 val tradeViewModel: TradeViewModel = viewModel(factory = TradeViewModel.Factory(dataStoreManager))
                 TradeScreen(tradeViewModel)
             }
-            composable(Screen.History.route) { HistoryScreen() }
+            composable(Screen.History.route) {
+                val historyViewModel: HistoryViewModel = viewModel(
+                    factory = HistoryViewModel.Factory(LocalContext.current.applicationContext as Application)
+                )
+                HistoryScreen(viewModel = historyViewModel)
+            }
             composable(Screen.Web.route) { WebScreen() }
             composable(Screen.Profile.route) { 
                 val profileViewModel: ProfileViewModel = viewModel(

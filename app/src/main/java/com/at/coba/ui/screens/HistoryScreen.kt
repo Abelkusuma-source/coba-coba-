@@ -18,13 +18,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.at.coba.R
 import java.text.SimpleDateFormat
 import java.util.*
 
 // 2. Data History disesuaikan dengan structure data asli
 data class HistoryItem(
-    val id: Int,
+    val id: Long,
     val pair: String,
     val status: String, // Won, Lost, Tie
     val type: String,   // BUY, SELL
@@ -37,7 +38,7 @@ data class HistoryItem(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HistoryScreen() {
+fun HistoryScreen(viewModel: HistoryViewModel) {
     var statusFilter by remember { mutableStateOf("All") }
     var pairFilter by remember { mutableStateOf("All") }
     var accountFilter by remember { mutableStateOf("All") }
@@ -45,36 +46,57 @@ fun HistoryScreen() {
     var showBottomSheet by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState()
 
-    val historyItems = remember {
-        listOf(
-            HistoryItem(1, "ASIA/X", "won", "BUY", "Real", "IDR", 100000.0, 85000.0, System.currentTimeMillis() - 3600000),
-            HistoryItem(2, "USD/USDT", "lost", "SELL", "Demo", "USD", 50.0, -50.0, System.currentTimeMillis() - 7200000),
-            HistoryItem(3, "ASIA/X", "tie", "BUY", "Real", "USD", 100.0, 0.0, System.currentTimeMillis() - 10800000),
-            HistoryItem(4, "USD/USDT", "won", "SELL", "Real", "IDR", 200000.0, 170000.0, System.currentTimeMillis() - 14400000),
-        )
+    val historyItems by viewModel.items.collectAsStateWithLifecycle()
+    val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
+    val loadError by viewModel.error.collectAsStateWithLifecycle()
+
+    LaunchedEffect(accountFilter) {
+        viewModel.load(accountFilter)
+    }
+
+    val pairOptions = remember(historyItems) {
+        listOf("All") + historyItems.map { it.pair }.distinct().sorted()
     }
 
     val filteredItems = remember(statusFilter, pairFilter, accountFilter, historyItems) {
         historyItems.filter {
-            (statusFilter == "All" || it.status == statusFilter) &&
-            (pairFilter == "All" || it.pair == pairFilter) &&
-            (accountFilter == "All" || it.accountMode == accountFilter)
+            val statusOk = statusFilter == "All" || it.status.equals(statusFilter, ignoreCase = true)
+            val pairOk = pairFilter == "All" || it.pair == pairFilter
+            val accountOk = accountFilter == "All" || it.accountMode == accountFilter
+            statusOk && pairOk && accountOk
         }
     }
 
+    val snackbarHostState = remember { SnackbarHostState() }
+    LaunchedEffect(loadError) {
+        val msg = loadError ?: return@LaunchedEffect
+        snackbarHostState.showSnackbar(message = msg)
+        viewModel.clearError()
+    }
+
     Column(modifier = Modifier.fillMaxSize().padding(12.dp)) {
+        SnackbarHost(hostState = snackbarHostState)
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             FilterDropdown(stringResource(R.string.status), listOf("All", "Won", "Lost", "Tie"), statusFilter, Modifier.weight(1f)) { statusFilter = it }
-            FilterDropdown(stringResource(R.string.pair), listOf("All", "ASIA/X", "USD/USDT"), pairFilter, Modifier.weight(1f)) { pairFilter = it }
+            FilterDropdown(stringResource(R.string.pair), pairOptions, pairFilter, Modifier.weight(1f)) {
+                pairFilter = it
+            }
         }
         
         Spacer(modifier = Modifier.height(8.dp))
         FilterDropdown(stringResource(R.string.account_mode), listOf("All", "Real", "Demo"), accountFilter, Modifier.fillMaxWidth()) { accountFilter = it }
         
         Spacer(modifier = Modifier.height(16.dp))
+
+        if (isLoading && historyItems.isEmpty()) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator()
+            }
+            return@Column
+        }
 
         LazyColumn(
             verticalArrangement = Arrangement.spacedBy(12.dp),
