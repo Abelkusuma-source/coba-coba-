@@ -1,17 +1,16 @@
 package com.at.coba.ui.screens
 
 import android.app.Application
-import android.net.Uri
+import android.os.SystemClock
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.at.coba.data.DataStoreManager
 import com.at.coba.data.ThemeMode
-import com.at.coba.data.network.ApiClient
-import com.at.coba.data.network.UpdateProfileRequest
 import com.at.coba.data.repository.ProfileFetchResult
 import com.at.coba.data.repository.UserProfileRepository
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -23,6 +22,8 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 class ProfileViewModel(
     application: Application,
@@ -35,6 +36,20 @@ class ProfileViewModel(
     private val _message = MutableSharedFlow<String>()
     val message: SharedFlow<String> = _message.asSharedFlow()
 
+    private val _isPullRefreshing = MutableStateFlow(false)
+    val isPullRefreshing: StateFlow<Boolean> = _isPullRefreshing.asStateFlow()
+
+    private val fetchMutex = Mutex()
+    private var lastSuccessfulFetchElapsedMs = 0L
+
+    companion object {
+        /** Debounce sebelum throttle — hindari spam saat event resume berdekatan */
+        private const val RESUME_DEBOUNCE_MS = 400L
+
+        /** Jangan fetch lagi jika berhasil baru saja dalam jendela ini (refresh diam saat tab bolak-balik cepat). */
+        private const val MIN_SUCCESS_INTERVAL_MS = 15_000L
+    }
+
     val themeMode: StateFlow<ThemeMode> = dataStoreManager.themeMode
         .stateIn(
             scope = viewModelScope,
@@ -43,83 +58,88 @@ class ProfileViewModel(
         )
 
     val profileImageUri: StateFlow<String?> = dataStoreManager.profileImageUri
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = null
-        )
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     val profileRemoteAvatarUrl: StateFlow<String?> = dataStoreManager.profileRemoteAvatarUrl
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = null
-        )
-
-    /** File content:// / unduhan lokal atau https; jika kosong pakai remote URL dari API. */
-    val avatarDisplayUrl: StateFlow<String?> = combine(
-        profileImageUri,
-        profileRemoteAvatarUrl
-    ) { fileOrUrl, remote ->
-        when {
-            !fileOrUrl.isNullOrBlank() -> fileOrUrl
-            !remote.isNullOrBlank() -> remote
-            else -> null
-        }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
-
-    val userEmail: StateFlow<String?> = dataStoreManager.userEmail
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
-    val userPhone: StateFlow<String?> = dataStoreManager.userPhone
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    /** Untuk Coil memory/disk cache key — naik tiap avatar di-refresh server. */
+    val profileAvatarEpoch: StateFlow<Long> = dataStoreManager.profileAvatarEpoch
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0L)
 
-    val userNickname: StateFlow<String?> = dataStoreManager.userNickname
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    val avatarDisplayUrl: StateFlow<String?> =
+        combine(profileImageUri, profileRemoteAvatarUrl) { local, remote ->
+            when {
+                !remote.isNullOrBlank() -> remote
+                !local.isNullOrBlank() -> local
+                else -> null
+            }
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
-    val isEmailVerified: StateFlow<Boolean> = dataStoreManager.isEmailVerified
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    val userEmail: StateFlow<String?> =
+        dataStoreManager.userEmail.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
-    val isPhoneVerified: StateFlow<Boolean> = dataStoreManager.isPhoneVerified
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    val userPhone: StateFlow<String?> =
+        dataStoreManager.userPhone.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
-    val isDocsVerified: StateFlow<Boolean> = dataStoreManager.isDocsVerified
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    val userNickname: StateFlow<String?> =
+        dataStoreManager.userNickname.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    val isEmailVerified: StateFlow<Boolean> =
+        dataStoreManager.isEmailVerified.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val isPhoneVerified: StateFlow<Boolean> =
+        dataStoreManager.isPhoneVerified.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val isDocsVerified: StateFlow<Boolean> =
+        dataStoreManager.isDocsVerified.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     init {
         viewModelScope.launch {
-            // Cek apakah data profil sudah ada di memori
             val email = dataStoreManager.userEmail.first()
             if (email.isNullOrBlank()) {
-                _uiState.value = ProfileUiState.Loading // Tampilkan Skeleton
+                _uiState.value = ProfileUiState.Loading
             }
-
-            // Selalu tarik data terbaru dari server
-            refreshProfile()
+            runProfileFetch(forceRefresh = true)
         }
     }
 
-    fun retryInitialLoad() {
+    /**
+     * Dipanggil saat layar Profil dapat [Lifecycle.Event.ON_RESUME] (mis. kembali dari tab lain).
+     */
+    fun onProfileScreenResumed() {
         viewModelScope.launch {
-            if (hasCachedProfile()) return@launch
-            _uiState.value = ProfileUiState.Loading
-            when (
-                val result = UserProfileRepository.fetchAndSyncFullProfile(getApplication())
-            ) {
-                is ProfileFetchResult.Success -> _uiState.value = ProfileUiState.Idle
-                is ProfileFetchResult.Failure -> {
-                    val shown = buildUserFacingError(
-                        result.httpCode,
-                        result.message ?: "Gagal memuat profil"
-                    )
-                    _uiState.value = ProfileUiState.LoadError(shown)
+            runProfileFetch(forceRefresh = false)
+        }
+    }
+
+    /** Pull-to-refresh manual — selalu memaksa fetch baru. */
+    fun refreshProfileFromPull() {
+        viewModelScope.launch {
+            _isPullRefreshing.value = true
+            try {
+                runProfileFetch(forceRefresh = true)
+            } finally {
+                _isPullRefreshing.value = false
+            }
+        }
+    }
+
+    /**
+     * @param forceRefresh true untuk init/login/pull; false untuk throttle + debounce (resume tab).
+     */
+    private suspend fun runProfileFetch(forceRefresh: Boolean) {
+        fetchMutex.withLock {
+            if (!forceRefresh) {
+                delay(RESUME_DEBOUNCE_MS)
+                val now = SystemClock.elapsedRealtime()
+                if (lastSuccessfulFetchElapsedMs > 0L &&
+                    now - lastSuccessfulFetchElapsedMs < MIN_SUCCESS_INTERVAL_MS
+                ) {
+                    return@withLock
                 }
             }
-        }
-    }
 
-    fun refreshProfile() {
-        viewModelScope.launch {
             when (val result = UserProfileRepository.fetchAndSyncFullProfile(getApplication())) {
                 is ProfileFetchResult.Failure -> {
                     val shown = buildUserFacingError(
@@ -132,51 +152,41 @@ class ProfileViewModel(
                         _message.emit(shown)
                     }
                 }
+
                 is ProfileFetchResult.Success -> {
-                    _uiState.value = ProfileUiState.Idle
+                    lastSuccessfulFetchElapsedMs = SystemClock.elapsedRealtime()
+                    applySuccessUi(result)
                 }
             }
         }
     }
 
-    fun updatePhone(newPhone: String) {
+    fun retryInitialLoad() {
         viewModelScope.launch {
-            _uiState.value = ProfileUiState.Submitting
-            try {
-                val apiService = ApiClient.getApiService(getApplication())
-                apiService.updateProfile(UpdateProfileRequest(phone = newPhone))
-                dataStoreManager.setUserProfileInfo(null, newPhone)
-                _message.emit("Phone number updated successfully")
-                _uiState.value = ProfileUiState.Idle
-            } catch (e: Exception) {
-                _message.emit("Update failed: ${e.message}")
-                _uiState.value = ProfileUiState.Idle
+            if (hasCachedProfile()) return@launch
+            _uiState.value = ProfileUiState.Loading
+            when (
+                val result = UserProfileRepository.fetchAndSyncFullProfile(getApplication())
+            ) {
+                is ProfileFetchResult.Success -> {
+                    lastSuccessfulFetchElapsedMs = SystemClock.elapsedRealtime()
+                    applySuccessUi(result)
+                }
+                is ProfileFetchResult.Failure -> {
+                    val shown = buildUserFacingError(
+                        result.httpCode,
+                        result.message ?: "Gagal memuat profil"
+                    )
+                    _uiState.value = ProfileUiState.LoadError(shown)
+                }
             }
         }
     }
 
-    fun updateNickname(nickname: String) {
-        viewModelScope.launch {
-            _uiState.value = ProfileUiState.Submitting
-            try {
-                val apiService = ApiClient.getApiService(getApplication())
-                apiService.updateProfile(UpdateProfileRequest(nickname = nickname))
-                dataStoreManager.setUserProfileInfo(null, null, nickname = nickname)
-                _message.emit("Nickname updated successfully")
-                _uiState.value = ProfileUiState.Idle
-            } catch (e: Exception) {
-                _message.emit("Update failed: ${e.message}")
-                _uiState.value = ProfileUiState.Idle
-            }
-        }
-    }
-
-    fun onImageSelected(uri: Uri?) {
-        viewModelScope.launch {
-            dataStoreManager.persistProfileImageFromPicker(uri)
-            if (uri != null) {
-                UserProfileRepository.uploadCachedProfileAvatar(getApplication())
-            }
+    private suspend fun applySuccessUi(result: ProfileFetchResult.Success) {
+        _uiState.value = ProfileUiState.Idle
+        if (result.avatarLocalCacheFailed) {
+            _message.emit("Foto tidak tersimpan secara lokal. Menampilkan dari server.")
         }
     }
 
@@ -200,10 +210,7 @@ class ProfileViewModel(
 
     sealed class ProfileUiState {
         object Idle : ProfileUiState()
-        /** Skeleton pertama kali halaman dibuka tanpa cache. */
         object Loading : ProfileUiState()
-        /** Kirim formulir nama/telepon tanpa skeleton full screen. */
-        object Submitting : ProfileUiState()
         data class LoadError(val message: String) : ProfileUiState()
     }
 

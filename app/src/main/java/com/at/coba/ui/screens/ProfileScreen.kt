@@ -1,11 +1,7 @@
 package com.at.coba.ui.screens
 
-import android.net.Uri
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,20 +10,21 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.ExperimentalMaterialApi
+import androidx.compose.material.pullrefresh.PullRefreshIndicator
+import androidx.compose.material.pullrefresh.pullRefresh
+import androidx.compose.material.pullrefresh.rememberPullRefreshState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudOff
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -37,25 +34,24 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import coil.memory.MemoryCache
 import coil.request.ImageRequest
-import com.at.coba.R
 import com.at.coba.data.ThemeMode
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.collectLatest
 
-// Skema warna biru muda sesuai referensi gambar
-val LightBlueButton = Color(0xFFD1E9FF)
-val LightPurpleText = Color(0xFFB8B1E0) // Warna teks Simpan yang agak keunguan
-
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterialApi::class)
 @Composable
 fun ProfileScreen(
     themeMode: ThemeMode,
     avatarDisplayUrl: String?,
+    avatarCacheEpoch: Long,
     userEmail: String?,
     userPhone: String?,
     userNickname: String?,
@@ -64,24 +60,37 @@ fun ProfileScreen(
     isDocsVerified: Boolean,
     uiState: ProfileViewModel.ProfileUiState,
     messageFlow: SharedFlow<String>,
-    onProfileImagePicked: (Uri?) -> Unit,
+    isPullRefreshing: Boolean,
     onThemeSelected: (ThemeMode) -> Unit,
-    onUpdatePhone: (String) -> Unit,
-    onUpdateNickname: (String) -> Unit,
     onLogout: () -> Unit,
     onRetryInitialLoad: () -> Unit,
+    onProfileResumed: () -> Unit,
+    onPullRefresh: () -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
     var showLogoutDialog by remember { mutableStateOf(false) }
-    
+
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                onProfileResumed()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    val pullRefreshState = rememberPullRefreshState(
+        refreshing = isPullRefreshing,
+        onRefresh = onPullRefresh
+    )
+
     val snackbarHostState = remember { SnackbarHostState() }
     val scrollState = rememberScrollState()
     val context = LocalContext.current
 
-    // Form states - keyed by DataStore values to update when fetch succeeds (200 OK)
-    var phone by remember(userPhone) { mutableStateOf(userPhone ?: "") }
-    var nickname by remember(userNickname) { mutableStateOf(userNickname ?: "") }
-    
     LaunchedEffect(messageFlow) {
         messageFlow.collectLatest { msg ->
             snackbarHostState.showSnackbar(msg)
@@ -107,8 +116,6 @@ fun ProfileScreen(
             )
         }
 
-        val formEnabled = uiState is ProfileViewModel.ProfileUiState.Idle
-
         when (uiState) {
             ProfileViewModel.ProfileUiState.Loading -> {
                 ProfileSkeleton(Modifier.padding(padding))
@@ -120,252 +127,219 @@ fun ProfileScreen(
                     onRetry = onRetryInitialLoad
                 )
             }
-
-            ProfileViewModel.ProfileUiState.Idle,
-            ProfileViewModel.ProfileUiState.Submitting -> {
-                Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .verticalScroll(scrollState)
-                    .background(MaterialTheme.colorScheme.background)
-                    .padding(16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                val galleryLauncher = rememberLauncherForActivityResult(
-                    contract = ActivityResultContracts.GetContent(),
-                    onResult = { uri: Uri? -> onProfileImagePicked(uri) }
-                )
-                val openGallery: () -> Unit = { galleryLauncher.launch("image/*") }
-
-                // Avatar Section
+            ProfileViewModel.ProfileUiState.Idle -> {
                 Box(
-                    modifier = Modifier.padding(bottom = 32.dp, top = 16.dp),
-                    contentAlignment = Alignment.Center
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(padding)
+                        .pullRefresh(pullRefreshState)
                 ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(scrollState)
+                            .background(MaterialTheme.colorScheme.background)
+                            .padding(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                    // Avatar — hanya tampilan (sinkron dari server)
                     Box(
-                        modifier = Modifier
-                            .size(130.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.surfaceVariant)
-                            .border(3.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f), CircleShape)
-                        .clickable(onClick = openGallery),
-                    contentAlignment = Alignment.Center
-                ) {
-                        // Flow: jika data tidak memiliki avatar atau avatar = null -> icon saja
-                        if (avatarDisplayUrl.isNullOrBlank()) {
-                            Icon(Icons.Default.Person, null, Modifier.size(80.dp), MaterialTheme.colorScheme.primary)
-                        } else {
-                            AsyncImage(
-                                model = ImageRequest.Builder(context)
-                                    .data(avatarDisplayUrl)
-                                    .crossfade(true)
-                                    .build(),
-                                contentDescription = null,
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop
-                            )
-                        }
-                    }
-                    FilledIconButton(
-                        onClick = openGallery,
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .offset(x = (-4).dp, y = (-4).dp)
-                            .size(40.dp),
-                        shape = CircleShape,
-                        colors = IconButtonDefaults.filledIconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.primary
-                        )
+                        modifier = Modifier.padding(bottom = 32.dp, top = 16.dp),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Icon(Icons.Default.Edit, null, Modifier.size(20.dp), Color.White)
-                    }
-                }
-
-                // Status Verifikasi
-                Surface(
-                    color = if (isDocsVerified) Color(0xFFE8F5E9) else Color(0xFFFFF3E0),
-                    shape = RoundedCornerShape(8.dp),
-                    modifier = Modifier.padding(bottom = 24.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            if (isDocsVerified) Icons.Default.CheckCircle else Icons.Default.Person,
-                            null,
-                            modifier = Modifier.size(16.dp),
-                            tint = if (isDocsVerified) Color(0xFF2E7D32) else Color(0xFFEF6C00)
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            if (isDocsVerified) "Akun Terverifikasi" else "Akun Belum Terverifikasi",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = if (isDocsVerified) Color(0xFF2E7D32) else Color(0xFFEF6C00),
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-
-                // Nama Panggilan Section
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    Text("Nama panggilan", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(12.dp))
-                    
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        OutlinedTextField(
-                            value = nickname,
-                            onValueChange = { nickname = it },
-                            label = { Text("Nama panggilan") },
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = MaterialTheme.colorScheme.primary,
-                                unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant
-                            )
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Button(
-                            onClick = { onUpdateNickname(nickname) },
-                            enabled = formEnabled,
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.height(56.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = LightBlueButton,
-                                contentColor = LightPurpleText
-                            )
+                        Box(
+                            modifier = Modifier
+                                .size(130.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                                .border(
+                                    3.dp,
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
+                                    CircleShape
+                                ),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Text("Simpan", fontWeight = FontWeight.Bold)
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                // Kontak Section
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    Text("Kontak", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(12.dp))
-                    
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        OutlinedTextField(
-                            value = phone,
-                            onValueChange = { phone = it },
-                            label = { Text("Telepon") },
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(12.dp),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                            trailingIcon = {
-                                if (isPhoneVerified) {
-                                    Icon(Icons.Default.CheckCircle, null, tint = Color(0xFF4CAF50), modifier = Modifier.size(20.dp))
+                            if (avatarDisplayUrl.isNullOrBlank()) {
+                                Icon(
+                                    Icons.Default.Person,
+                                    null,
+                                    Modifier.size(80.dp),
+                                    MaterialTheme.colorScheme.primary
+                                )
+                            } else {
+                                val epoch = avatarCacheEpoch
+                                val req = remember(avatarDisplayUrl, epoch) {
+                                    ImageRequest.Builder(context)
+                                        .data(avatarDisplayUrl)
+                                        .memoryCacheKey(
+                                            MemoryCache.Key("stockity_avatar_${epoch}_${avatarDisplayUrl.orEmpty()}")
+                                        )
+                                        .diskCacheKey("stockity_avatar_${epoch}_${avatarDisplayUrl.orEmpty()}")
+                                        .crossfade(true)
+                                        .build()
                                 }
-                            },
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = MaterialTheme.colorScheme.primary,
-                                unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant
-                            )
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Button(
-                            onClick = { onUpdatePhone(phone) },
-                            enabled = formEnabled,
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.height(56.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = LightBlueButton,
-                                contentColor = LightPurpleText
-                            )
-                        ) {
-                            Text("Simpan", fontWeight = FontWeight.Bold)
+                                AsyncImage(
+                                    model = req,
+                                    contentDescription = null,
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop
+                                )
+                            }
                         }
                     }
-                    
-                    Spacer(modifier = Modifier.height(16.dp))
-                    
-                    OutlinedTextField(
-                        value = userEmail ?: "Memuat email...",
-                        onValueChange = {},
-                        label = { Text("Email") },
-                        readOnly = true,
-                        enabled = false,
-                        trailingIcon = { 
-                            Icon(
-                                Icons.Default.CheckCircle, 
-                                null, 
-                                tint = if (isEmailVerified) Color(0xFF4CAF50) else Color.Gray,
-                                modifier = Modifier.size(20.dp)
-                            ) 
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-                            disabledBorderColor = Color.Transparent,
-                            disabledTextColor = MaterialTheme.colorScheme.onSurface
-                        )
-                    )
-                }
 
-                Spacer(modifier = Modifier.height(32.dp))
-
-                // Theme Selection
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text("Pengaturan Tema", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                        Spacer(modifier = Modifier.height(12.dp))
-                        ExposedDropdownMenuBox(
-                            expanded = expanded,
-                            onExpandedChange = { expanded = !expanded }
+                    Surface(
+                        color = if (isDocsVerified) Color(0xFFE8F5E9) else Color(0xFFFFF3E0),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 24.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            OutlinedTextField(
-                                value = when(themeMode) {
-                                    ThemeMode.LIGHT -> "Terang"
-                                    ThemeMode.DARK -> "Gelap"
-                                    else -> "Ikuti Sistem"
-                                },
-                                onValueChange = {},
-                                readOnly = true,
-                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
-                                modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable, true).fillMaxWidth(),
-                                shape = RoundedCornerShape(12.dp)
+                            Icon(
+                                if (isDocsVerified) Icons.Default.CheckCircle else Icons.Default.Person,
+                                null,
+                                modifier = Modifier.size(18.dp),
+                                tint = if (isDocsVerified) Color(0xFF2E7D32) else Color(0xFFEF6C00)
                             )
-                            ExposedDropdownMenu(expanded, { expanded = false }) {
-                                ThemeMode.entries.forEach { mode ->
-                                    DropdownMenuItem(
-                                        text = { Text(mode.name) },
-                                        onClick = { onThemeSelected(mode); expanded = false }
-                                    )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                if (isDocsVerified) "Akun Terverifikasi" else "Akun Belum Terverifikasi",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = if (isDocsVerified) Color(0xFF2E7D32) else Color(0xFFEF6C00),
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+                        )
+                    ) {
+                        Column(Modifier.padding(16.dp)) {
+                            Text(
+                                "Data akun",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(Modifier.height(16.dp))
+                            ProfileReadOnlyRow(
+                                label = "Nama panggilan",
+                                value = userNickname?.takeIf { it.isNotBlank() } ?: "—"
+                            )
+                            Spacer(Modifier.height(12.dp))
+                            ProfileReadOnlyRow(
+                                label = "Telepon",
+                                value = userPhone?.takeIf { it.isNotBlank() } ?: "—",
+                                verified = isPhoneVerified
+                            )
+                            Spacer(Modifier.height(12.dp))
+                            ProfileReadOnlyRow(
+                                label = "Email",
+                                value = userEmail?.takeIf { it.isNotBlank() } ?: "—",
+                                verified = isEmailVerified
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                        )
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text(
+                                "Pengaturan Tema",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            ExposedDropdownMenuBox(
+                                expanded = expanded,
+                                onExpandedChange = { expanded = !expanded }
+                            ) {
+                                OutlinedTextField(
+                                    value = when (themeMode) {
+                                        ThemeMode.LIGHT -> "Terang"
+                                        ThemeMode.DARK -> "Gelap"
+                                        else -> "Ikuti Sistem"
+                                    },
+                                    onValueChange = {},
+                                    readOnly = true,
+                                    trailingIcon = {
+                                        ExposedDropdownMenuDefaults.TrailingIcon(expanded)
+                                    },
+                                    modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable, true).fillMaxWidth(),
+                                    shape = RoundedCornerShape(12.dp)
+                                )
+                                ExposedDropdownMenu(expanded, { expanded = false }) {
+                                    ThemeMode.entries.forEach { mode ->
+                                        DropdownMenuItem(
+                                            text = { Text(mode.name) },
+                                            onClick = { onThemeSelected(mode); expanded = false }
+                                        )
+                                    }
                                 }
                             }
                         }
                     }
-                }
 
-                Spacer(modifier = Modifier.height(32.dp))
+                    Spacer(modifier = Modifier.height(32.dp))
 
-                Button(
-                    onClick = { showLogoutDialog = true },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.8f))
-                ) {
-                    Icon(Icons.AutoMirrored.Filled.Logout, null)
-                    Spacer(Modifier.width(8.dp))
-                    Text("LOGOUT")
+                    Button(
+                        onClick = { showLogoutDialog = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.8f))
+                    ) {
+                        Icon(Icons.AutoMirrored.Filled.Logout, null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("LOGOUT")
+                    }
+
+                    Spacer(modifier = Modifier.height(64.dp))
+                    }
+                    PullRefreshIndicator(
+                        refreshing = isPullRefreshing,
+                        state = pullRefreshState,
+                        modifier = Modifier.align(Alignment.TopCenter)
+                    )
                 }
-                
-                Spacer(modifier = Modifier.height(64.dp))
-                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ProfileReadOnlyRow(
+    label: String,
+    value: String,
+    verified: Boolean = false
+) {
+    Column(Modifier.fillMaxWidth()) {
+        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                value,
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.weight(1f)
+            )
+            if (verified) {
+                Icon(
+                    Icons.Default.CheckCircle,
+                    contentDescription = "Terverifikasi",
+                    tint = Color(0xFF4CAF50),
+                    modifier = Modifier.size(20.dp)
+                )
             }
         }
     }
@@ -417,7 +391,6 @@ fun ProfileSkeleton(modifier: Modifier = Modifier) {
             .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Avatar Placeholder
         Box(
             modifier = Modifier
                 .padding(bottom = 32.dp, top = 16.dp)
@@ -426,21 +399,25 @@ fun ProfileSkeleton(modifier: Modifier = Modifier) {
                 .background(Color.Gray.copy(alpha = 0.2f))
         )
 
-        // Status Badge Placeholder
         Box(
             modifier = Modifier
                 .padding(bottom = 24.dp)
-                .width(150.dp)
+                .fillMaxWidth()
                 .height(32.dp)
                 .clip(RoundedCornerShape(8.dp))
                 .background(Color.Gray.copy(alpha = 0.1f))
         )
 
         repeat(3) {
-            Column(modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
-                Box(modifier = Modifier.width(100.dp).height(20.dp).background(Color.Gray.copy(alpha = 0.1f)))
+            Column(modifier = Modifier.fillMaxWidth().padding(bottom = 20.dp)) {
+                Box(
+                    modifier = Modifier.width(100.dp).height(16.dp).background(Color.Gray.copy(alpha = 0.1f))
+                )
                 Spacer(modifier = Modifier.height(8.dp))
-                Box(modifier = Modifier.fillMaxWidth().height(56.dp).clip(RoundedCornerShape(12.dp)).background(Color.Gray.copy(alpha = 0.05f)))
+                Box(
+                    modifier = Modifier.fillMaxWidth().height(44.dp).clip(RoundedCornerShape(12.dp))
+                        .background(Color.Gray.copy(alpha = 0.05f))
+                )
             }
         }
     }
