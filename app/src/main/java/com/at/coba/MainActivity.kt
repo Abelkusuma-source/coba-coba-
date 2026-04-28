@@ -222,6 +222,7 @@ fun MainScreen(dataStoreManager: DataStoreManager) {
                 )
                 val currentThemeMode by profileViewModel.themeMode.collectAsStateWithLifecycle()
                 val avatarDisplayUrl by profileViewModel.avatarDisplayUrl.collectAsStateWithLifecycle()
+                val avatarCacheEpoch by profileViewModel.profileAvatarEpoch.collectAsStateWithLifecycle()
                 val userEmail by profileViewModel.userEmail.collectAsStateWithLifecycle()
                 val userPhone by profileViewModel.userPhone.collectAsStateWithLifecycle()
                 val userNickname by profileViewModel.userNickname.collectAsStateWithLifecycle()
@@ -229,12 +230,14 @@ fun MainScreen(dataStoreManager: DataStoreManager) {
                 val isPhoneVerified by profileViewModel.isPhoneVerified.collectAsStateWithLifecycle()
                 val isDocsVerified by profileViewModel.isDocsVerified.collectAsStateWithLifecycle()
                 val uiState by profileViewModel.uiState.collectAsStateWithLifecycle()
+                val isPullRefreshing by profileViewModel.isPullRefreshing.collectAsStateWithLifecycle()
 
                 val tradeViewModel: TradeViewModel = viewModel(factory = TradeViewModel.Factory(dataStoreManager))
 
                 ProfileScreen(
                     themeMode = currentThemeMode,
                     avatarDisplayUrl = avatarDisplayUrl,
+                    avatarCacheEpoch = avatarCacheEpoch,
                     userEmail = userEmail,
                     userPhone = userPhone,
                     userNickname = userNickname,
@@ -243,12 +246,12 @@ fun MainScreen(dataStoreManager: DataStoreManager) {
                     isDocsVerified = isDocsVerified,
                     uiState = uiState,
                     messageFlow = profileViewModel.message,
-                    onProfileImagePicked = profileViewModel::onImageSelected,
+                    isPullRefreshing = isPullRefreshing,
                     onThemeSelected = profileViewModel::onThemeSelected,
-                    onUpdatePhone = profileViewModel::updatePhone,
-                    onUpdateNickname = profileViewModel::updateNickname,
                     onLogout = { tradeViewModel.performLogout() },
-                    onRetryInitialLoad = profileViewModel::retryInitialLoad
+                    onRetryInitialLoad = profileViewModel::retryInitialLoad,
+                    onProfileResumed = profileViewModel::onProfileScreenResumed,
+                    onPullRefresh = profileViewModel::refreshProfileFromPull
                 )
             }
             composable(Screen.Debug.route) { DebugScreen(dataStoreManager) }

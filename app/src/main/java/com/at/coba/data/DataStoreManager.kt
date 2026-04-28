@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.Dispatchers
@@ -55,6 +56,8 @@ class DataStoreManager(private val context: Context) {
         val TRADING_STRATEGY_KEY = stringPreferencesKey("trading_strategy")
         val PROFILE_IMAGE_URI_KEY = stringPreferencesKey("profile_image_uri")
         val PROFILE_REMOTE_AVATAR_URL_KEY = stringPreferencesKey("profile_remote_avatar_url")
+        /** Di-bump setiap avatar server di-refresh agar Coil memakai cache key baru. */
+        val PROFILE_AVATAR_EPOCH_KEY = longPreferencesKey("profile_avatar_display_epoch")
         val USER_ID_KEY = stringPreferencesKey("user_id")
         val USER_EMAIL_KEY = stringPreferencesKey("user_email")
         val USER_PHONE_KEY = stringPreferencesKey("user_phone")
@@ -184,6 +187,10 @@ class DataStoreManager(private val context: Context) {
         preferences[PROFILE_REMOTE_AVATAR_URL_KEY]
     }
 
+    val profileAvatarEpoch: Flow<Long> = dataStore.data.map { preferences ->
+        preferences[PROFILE_AVATAR_EPOCH_KEY] ?: 0L
+    }
+
     val userEmail: Flow<String?> = dataStore.data.map { it[USER_EMAIL_KEY] }
     val userPhone: Flow<String?> = dataStore.data.map { it[USER_PHONE_KEY] }
     val userNickname: Flow<String?> = dataStore.data.map { it[USER_NICKNAME_KEY] }
@@ -233,6 +240,25 @@ class DataStoreManager(private val context: Context) {
         }
     }
 
+    suspend fun bumpProfileAvatarEpoch() {
+        dataStore.edit { preferences ->
+            val cur = preferences[PROFILE_AVATAR_EPOCH_KEY] ?: 0L
+            preferences[PROFILE_AVATAR_EPOCH_KEY] = cur + 1L
+        }
+    }
+
+    /**
+     * Hapus hanya URI file lokal; URL remote tetap (untuk tampilan https dari server).
+     */
+    suspend fun removeProfileLocalImageUriOnly() {
+        withContext(Dispatchers.IO) {
+            File(context.filesDir, PROFILE_IMAGE_INTERNAL_FILE).delete()
+        }
+        dataStore.edit { preferences ->
+            preferences.remove(PROFILE_IMAGE_URI_KEY)
+        }
+    }
+
     /**
      * Removes cached profile file and profile-related keys (not [USER_ID_KEY]).
      */
@@ -243,6 +269,7 @@ class DataStoreManager(private val context: Context) {
         dataStore.edit { preferences ->
             preferences.remove(PROFILE_IMAGE_URI_KEY)
             preferences.remove(PROFILE_REMOTE_AVATAR_URL_KEY)
+            preferences.remove(PROFILE_AVATAR_EPOCH_KEY)
         }
     }
 

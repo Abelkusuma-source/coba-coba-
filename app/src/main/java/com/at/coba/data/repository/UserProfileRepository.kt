@@ -16,7 +16,10 @@ import retrofit2.HttpException
 import java.io.File
 
 sealed class ProfileFetchResult {
-    object Success : ProfileFetchResult()
+    /**
+     * @param avatarLocalCacheFailed true jika unduh ke file lokal gagal; UI tetap bisa memuat dari URL HTTPS.
+     */
+    data class Success(val avatarLocalCacheFailed: Boolean = false) : ProfileFetchResult()
     data class Failure(val httpCode: Int?, val message: String?) : ProfileFetchResult()
 }
 
@@ -31,7 +34,6 @@ object UserProfileRepository {
         }
         dm.setUserId(newId)
 
-        // Trigger full profile fetch to get email/phone/avatar/verification
         fetchAndSyncFullProfile(appContext)
 
         val remoteUrl = listOf(
@@ -42,7 +44,11 @@ object UserProfileRepository {
 
         if (!remoteUrl.isNullOrEmpty()) {
             val resolved = resolveAvatarUrl(remoteUrl)
-            cacheAvatarFromRemoteUrl(appContext, resolved)
+            dm.setProfileRemoteAvatarUrl(resolved)
+            dm.bumpProfileAvatarEpoch()
+            if (!cacheAvatarFromRemoteUrl(appContext, resolved)) {
+                dm.removeProfileLocalImageUriOnly()
+            }
         }
     }
 
@@ -55,8 +61,6 @@ object UserProfileRepository {
             val profile = apiService.getProfile()
             val dm = DataStoreManager(context.applicationContext)
 
-            android.util.Log.d("UserProfileRepo", "Fetch Success: ${profile.data.email}")
-
             dm.setUserProfileInfo(
                 email = profile.data.email,
                 phone = profile.data.phone,
@@ -65,21 +69,27 @@ object UserProfileRepository {
                 phoneVerified = profile.data.phoneVerified,
                 docsVerified = profile.data.docsVerified
             )
-            
-            // ... rest of logic
+
             val avatarRaw = profile.data.avatar?.trim().orEmpty()
             if (avatarRaw.isEmpty()) {
-                dm.setProfileRemoteAvatarUrl(null)
+                dm.clearProfileImageStorage()
+                ProfileFetchResult.Success(avatarLocalCacheFailed = false)
             } else {
                 val resolved = resolveAvatarUrl(avatarRaw)
-                cacheAvatarFromRemoteUrl(context, resolved)
+                dm.setProfileRemoteAvatarUrl(resolved)
+                dm.bumpProfileAvatarEpoch()
+
+                val cachedOk = cacheAvatarFromRemoteUrl(context, resolved)
+                if (!cachedOk) {
+                    dm.removeProfileLocalImageUriOnly()
+                    ProfileFetchResult.Success(avatarLocalCacheFailed = true)
+                } else {
+                    ProfileFetchResult.Success(avatarLocalCacheFailed = false)
+                }
             }
-            ProfileFetchResult.Success
         } catch (e: HttpException) {
-            android.util.Log.e("UserProfileRepo", "Http Error ${e.code()}: ${e.message()} | Body: ${e.response()?.errorBody()?.string()}")
             ProfileFetchResult.Failure(e.code(), e.message())
         } catch (e: Exception) {
-            android.util.Log.e("UserProfileRepo", "Generic Error: ${e.message}", e)
             ProfileFetchResult.Failure(null, e.message ?: e.toString())
         }
     }
@@ -94,29 +104,34 @@ object UserProfileRepository {
         return if (t.startsWith("/")) "$base$t" else "$base/$t"
     }
 
-    suspend fun cacheAvatarFromRemoteUrl(appContext: Context, url: String) = withContext(Dispatchers.IO) {
-        val ctx = appContext.applicationContext
-        val dm = DataStoreManager(ctx)
-        try {
-            val client = ApiClient.getOkHttpClient(ctx)
-            val request = Request.Builder().url(url).get().build()
-            var cachedFileUri: String? = null
-            client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) return@use
-                val body = response.body ?: return@use
-                val dest = File(ctx.filesDir, DataStoreManager.PROFILE_IMAGE_INTERNAL_FILE)
-                body.byteStream().use { input ->
-                    dest.outputStream().use { output -> input.copyTo(output) }
+    /**
+     * Menyimpan avatar ke file internal. URL remote sudah harus ditulis pemanggil.
+     * @return false jika status bukan 2xx atau pengecualian I/O.
+     */
+    suspend fun cacheAvatarFromRemoteUrl(appContext: Context, url: String): Boolean =
+        withContext(Dispatchers.IO) {
+            val ctx = appContext.applicationContext
+            val dm = DataStoreManager(ctx)
+            try {
+                val client = ApiClient.getOkHttpClient(ctx)
+                val request = Request.Builder().url(url).get().build()
+                var success = false
+                client.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) return@use
+                    val responseBody = response.body ?: return@use
+                    val dest = File(ctx.filesDir, DataStoreManager.PROFILE_IMAGE_INTERNAL_FILE)
+                    responseBody.byteStream().use { input ->
+                        dest.outputStream().use { output -> input.copyTo(output) }
+                    }
+                    val fileUri = Uri.fromFile(dest).toString()
+                    dm.setProfileImageUri(fileUri)
+                    success = true
                 }
-                cachedFileUri = Uri.fromFile(dest).toString()
+                success
+            } catch (_: Exception) {
+                false
             }
-            cachedFileUri?.let { fileUri ->
-                dm.setProfileImageUri(fileUri)
-                dm.setProfileRemoteAvatarUrl(url)
-            }
-        } catch (_: Exception) {
         }
-    }
 
     suspend fun uploadCachedProfileAvatar(appContext: Context): Result<String> = withContext(Dispatchers.IO) {
         val ctx = appContext.applicationContext
@@ -139,6 +154,7 @@ object UserProfileRepository {
             }
             dm.setProfileImageUri(url)
             dm.setProfileRemoteAvatarUrl(url)
+            dm.bumpProfileAvatarEpoch()
             Result.success(url)
         } catch (e: Exception) {
             Result.failure(e)
