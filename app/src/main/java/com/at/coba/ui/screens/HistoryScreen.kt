@@ -4,6 +4,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.ExperimentalMaterialApi
+import androidx.compose.material.pullrefresh.PullRefreshIndicator
+import androidx.compose.material.pullrefresh.pullRefresh
+import androidx.compose.material.pullrefresh.rememberPullRefreshState
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -36,7 +40,7 @@ data class HistoryItem(
     val createdAt: Long
 )
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterialApi::class)
 @Composable
 fun HistoryScreen(viewModel: HistoryViewModel) {
     var statusFilter by remember { mutableStateOf("All") }
@@ -48,7 +52,13 @@ fun HistoryScreen(viewModel: HistoryViewModel) {
 
     val historyItems by viewModel.items.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
+    val isPullRefreshing by viewModel.isPullRefreshing.collectAsStateWithLifecycle()
     val loadError by viewModel.error.collectAsStateWithLifecycle()
+
+    val pullRefreshState = rememberPullRefreshState(
+        refreshing = isPullRefreshing,
+        onRefresh = { viewModel.refreshFromPull() }
+    )
 
     LaunchedEffect(accountFilter) {
         viewModel.load(accountFilter)
@@ -85,32 +95,51 @@ fun HistoryScreen(viewModel: HistoryViewModel) {
                 pairFilter = it
             }
         }
-        
+
         Spacer(modifier = Modifier.height(8.dp))
         FilterDropdown(stringResource(R.string.account_mode), listOf("All", "Real", "Demo"), accountFilter, Modifier.fillMaxWidth()) { accountFilter = it }
-        
+
         Spacer(modifier = Modifier.height(16.dp))
 
         if (isLoading && historyItems.isEmpty()) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
                 CircularProgressIndicator()
             }
             return@Column
         }
 
-        LazyColumn(
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier.fillMaxSize()
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
         ) {
-            items(filteredItems, key = { it.id }) { item ->
-                HistoryCard(
-                    item = item, 
-                    onClick = { 
-                        selectedItem = item 
-                        showBottomSheet = true
-                    }
-                )
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .pullRefresh(pullRefreshState)
+            ) {
+                items(filteredItems, key = { it.id }) { item ->
+                    HistoryCard(
+                        item = item,
+                        onClick = {
+                            selectedItem = item
+                            showBottomSheet = true
+                        }
+                    )
+                }
             }
+            PullRefreshIndicator(
+                refreshing = isPullRefreshing,
+                state = pullRefreshState,
+                modifier = Modifier.align(Alignment.TopCenter)
+            )
         }
     }
 

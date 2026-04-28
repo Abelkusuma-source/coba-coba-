@@ -21,25 +21,49 @@ class HistoryViewModel(
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
+    private val _isPullRefreshing = MutableStateFlow(false)
+    val isPullRefreshing: StateFlow<Boolean> = _isPullRefreshing.asStateFlow()
+
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
 
+    /** Filter akun terakhir (All / Real / Demo) untuk pull-to-refresh. */
+    private var lastAccountFilter: String = "All"
+
     fun load(accountFilter: String) {
         viewModelScope.launch {
+            lastAccountFilter = accountFilter
             _isLoading.value = true
             _error.value = null
-            val ctx = getApplication<Application>()
-            val result = when (accountFilter) {
-                "Real" -> TradeHistoryRepository.fetchTradeDeals(ctx, "real")
-                "Demo" -> TradeHistoryRepository.fetchTradeDeals(ctx, "demo")
-                else -> TradeHistoryRepository.fetchAllMerged(ctx)
-            }
-            result.fold(
-                onSuccess = { _items.value = it },
-                onFailure = { e -> _error.value = e.message ?: e.javaClass.simpleName }
-            )
+            executeFetch()
             _isLoading.value = false
         }
+    }
+
+    /** Tarik-ke-bawah seperti Profil — memuat ulang data dari API tanpa menutup aplikasi. */
+    fun refreshFromPull() {
+        viewModelScope.launch {
+            _isPullRefreshing.value = true
+            _error.value = null
+            try {
+                executeFetch()
+            } finally {
+                _isPullRefreshing.value = false
+            }
+        }
+    }
+
+    private suspend fun executeFetch() {
+        val ctx = getApplication<Application>()
+        val result = when (lastAccountFilter) {
+            "Real" -> TradeHistoryRepository.fetchTradeDeals(ctx, "real")
+            "Demo" -> TradeHistoryRepository.fetchTradeDeals(ctx, "demo")
+            else -> TradeHistoryRepository.fetchAllMerged(ctx)
+        }
+        result.fold(
+            onSuccess = { _items.value = it },
+            onFailure = { e -> _error.value = e.message ?: e.javaClass.simpleName }
+        )
     }
 
     fun clearError() {
