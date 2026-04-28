@@ -10,6 +10,7 @@ import com.at.coba.data.DataStoreManager
 import com.at.coba.data.ThemeMode
 import com.at.coba.data.network.ApiClient
 import com.at.coba.data.network.UpdateProfileRequest
+import com.at.coba.data.repository.ProfileFetchResult
 import com.at.coba.data.repository.UserProfileRepository
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -18,6 +19,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -47,6 +49,25 @@ class ProfileViewModel(
             initialValue = null
         )
 
+    val profileRemoteAvatarUrl: StateFlow<String?> = dataStoreManager.profileRemoteAvatarUrl
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = null
+        )
+
+    /** File content:// / unduhan lokal atau https; jika kosong pakai remote URL dari API. */
+    val avatarDisplayUrl: StateFlow<String?> = combine(
+        profileImageUri,
+        profileRemoteAvatarUrl
+    ) { fileOrUrl, remote ->
+        when {
+            !fileOrUrl.isNullOrBlank() -> fileOrUrl
+            !remote.isNullOrBlank() -> remote
+            else -> null
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
     val userEmail: StateFlow<String?> = dataStoreManager.userEmail
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
@@ -67,41 +88,67 @@ class ProfileViewModel(
 
     init {
         viewModelScope.launch {
-            // Cek apakah data di DataStore sudah ada
-            val currentEmail = dataStoreManager.userEmail.first()
-            val currentNickname = dataStoreManager.userNickname.first()
-
-            if (currentEmail.isNullOrBlank() || currentNickname.isNullOrBlank()) {
-                // TAMPILKAN EMPTY SKELETON jika data dasar belum ada
-                _uiState.value = ProfileUiState.Loading
-            }
-
-            try {
-                // Jalankan Fetch OKHTTP via Repository
-                UserProfileRepository.fetchAndSyncFullProfile(getApplication())
-            } catch (_: Exception) {
-                // Error handled inside repository or silently for now
-            } finally {
-                // Selesai loading, tampilkan data yang ada (baik dari cache atau fetch baru)
+            if (hasCachedProfile()) {
                 _uiState.value = ProfileUiState.Idle
+                when (UserProfileRepository.fetchAndSyncFullProfile(getApplication())) {
+                    is ProfileFetchResult.Failure -> { }
+                    is ProfileFetchResult.Success -> { }
+                }
+            } else {
+                _uiState.value = ProfileUiState.Loading
+                when (
+                    val result = UserProfileRepository.fetchAndSyncFullProfile(getApplication())
+                ) {
+                    is ProfileFetchResult.Success -> _uiState.value = ProfileUiState.Idle
+                    is ProfileFetchResult.Failure -> {
+                        val shown = buildUserFacingError(
+                            result.httpCode,
+                            result.message ?: "Gagal memuat profil"
+                        )
+                        _uiState.value = ProfileUiState.LoadError(shown)
+                    }
+                }
+            }
+        }
+    }
+
+    fun retryInitialLoad() {
+        viewModelScope.launch {
+            if (hasCachedProfile()) return@launch
+            _uiState.value = ProfileUiState.Loading
+            when (
+                val result = UserProfileRepository.fetchAndSyncFullProfile(getApplication())
+            ) {
+                is ProfileFetchResult.Success -> _uiState.value = ProfileUiState.Idle
+                is ProfileFetchResult.Failure -> {
+                    val shown = buildUserFacingError(
+                        result.httpCode,
+                        result.message ?: "Gagal memuat profil"
+                    )
+                    _uiState.value = ProfileUiState.LoadError(shown)
+                }
             }
         }
     }
 
     fun refreshProfile() {
         viewModelScope.launch {
-            _uiState.value = ProfileUiState.Loading
-            try {
-                UserProfileRepository.fetchAndSyncFullProfile(getApplication())
-            } finally {
-                _uiState.value = ProfileUiState.Idle
+            when (val result = UserProfileRepository.fetchAndSyncFullProfile(getApplication())) {
+                is ProfileFetchResult.Failure -> {
+                    val shown = buildUserFacingError(
+                        result.httpCode,
+                        result.message ?: "Gagal memperbarui profil"
+                    )
+                    _message.emit(shown)
+                }
+                is ProfileFetchResult.Success -> { }
             }
         }
     }
 
     fun updatePhone(newPhone: String) {
         viewModelScope.launch {
-            _uiState.value = ProfileUiState.Loading
+            _uiState.value = ProfileUiState.Submitting
             try {
                 val apiService = ApiClient.getApiService(getApplication())
                 apiService.updateProfile(UpdateProfileRequest(phone = newPhone))
@@ -117,7 +164,7 @@ class ProfileViewModel(
 
     fun updateNickname(nickname: String) {
         viewModelScope.launch {
-            _uiState.value = ProfileUiState.Loading
+            _uiState.value = ProfileUiState.Submitting
             try {
                 val apiService = ApiClient.getApiService(getApplication())
                 apiService.updateProfile(UpdateProfileRequest(nickname = nickname))
@@ -130,7 +177,6 @@ class ProfileViewModel(
             }
         }
     }
-
 
     fun onImageSelected(uri: Uri?) {
         viewModelScope.launch {
@@ -147,9 +193,25 @@ class ProfileViewModel(
         }
     }
 
+    private suspend fun hasCachedProfile(): Boolean {
+        val email = dataStoreManager.userEmail.first()
+        return !email.isNullOrBlank()
+    }
+
+    private fun buildUserFacingError(httpCode: Int?, raw: String): String {
+        if (httpCode == 401 || httpCode == 403) {
+            return "Sesi kedaluwarsa atau tidak memiliki akses. Silakan login lagi."
+        }
+        return if (raw.length > 200) "${raw.take(197)}..." else raw
+    }
+
     sealed class ProfileUiState {
         object Idle : ProfileUiState()
+        /** Skeleton pertama kali halaman dibuka tanpa cache. */
         object Loading : ProfileUiState()
+        /** Kirim formulir nama/telepon tanpa skeleton full screen. */
+        object Submitting : ProfileUiState()
+        data class LoadError(val message: String) : ProfileUiState()
     }
 
     class Factory(

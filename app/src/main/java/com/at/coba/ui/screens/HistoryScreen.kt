@@ -308,7 +308,7 @@ fun FilterDropdown(label: String, options: List<String>, selectedOption: String,
             value = selectedOption, onValueChange = {}, readOnly = true, label = { Text(label) },
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
             modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, true).fillMaxWidth(),
-            textStyle = MaterialTheme.typography.bodyMedium, singleLine = true
+                textStyle = MaterialTheme.typography.bodyMedium, singleLine = true
         )
         ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             options.forEach { DropdownMenuItem(text = { Text(it) }, onClick = { onOptionSelected(it); expanded = false }) }

@@ -198,7 +198,7 @@ fun MainScreen(dataStoreManager: DataStoreManager) {
                     factory = ProfileViewModel.Factory(LocalContext.current.applicationContext as Application, dataStoreManager)
                 )
                 val currentThemeMode by profileViewModel.themeMode.collectAsStateWithLifecycle()
-                val profileImageUri by profileViewModel.profileImageUri.collectAsStateWithLifecycle()
+                val avatarDisplayUrl by profileViewModel.avatarDisplayUrl.collectAsStateWithLifecycle()
                 val userEmail by profileViewModel.userEmail.collectAsStateWithLifecycle()
                 val userPhone by profileViewModel.userPhone.collectAsStateWithLifecycle()
                 val userNickname by profileViewModel.userNickname.collectAsStateWithLifecycle()
@@ -211,7 +211,7 @@ fun MainScreen(dataStoreManager: DataStoreManager) {
 
                 ProfileScreen(
                     themeMode = currentThemeMode,
-                    profileImageUri = profileImageUri,
+                    avatarDisplayUrl = avatarDisplayUrl,
                     userEmail = userEmail,
                     userPhone = userPhone,
                     userNickname = userNickname,
@@ -224,7 +224,8 @@ fun MainScreen(dataStoreManager: DataStoreManager) {
                     onThemeSelected = profileViewModel::onThemeSelected,
                     onUpdatePhone = profileViewModel::updatePhone,
                     onUpdateNickname = profileViewModel::updateNickname,
-                    onLogout = { tradeViewModel.performLogout() }
+                    onLogout = { tradeViewModel.performLogout() },
+                    onRetryInitialLoad = profileViewModel::retryInitialLoad
                 )
             }
             composable(Screen.Debug.route) { DebugScreen(dataStoreManager) }

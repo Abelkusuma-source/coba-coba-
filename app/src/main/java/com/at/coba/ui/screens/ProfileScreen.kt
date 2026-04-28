@@ -6,6 +6,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -25,6 +26,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
@@ -52,7 +54,7 @@ val LightPurpleText = Color(0xFFB8B1E0) // Warna teks Simpan yang agak keunguan
 @Composable
 fun ProfileScreen(
     themeMode: ThemeMode,
-    profileImageUri: String?,
+    avatarDisplayUrl: String?,
     userEmail: String?,
     userPhone: String?,
     userNickname: String?,
@@ -65,7 +67,8 @@ fun ProfileScreen(
     onThemeSelected: (ThemeMode) -> Unit,
     onUpdatePhone: (String) -> Unit,
     onUpdateNickname: (String) -> Unit,
-    onLogout: () -> Unit
+    onLogout: () -> Unit,
+    onRetryInitialLoad: () -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
     var showLogoutDialog by remember { mutableStateOf(false) }
@@ -103,10 +106,23 @@ fun ProfileScreen(
             )
         }
 
-        if (uiState is ProfileViewModel.ProfileUiState.Loading) {
-            ProfileSkeleton(Modifier.padding(padding))
-        } else {
-            Column(
+        val formEnabled = uiState is ProfileViewModel.ProfileUiState.Idle
+
+        when (uiState) {
+            ProfileViewModel.ProfileUiState.Loading -> {
+                ProfileSkeleton(Modifier.padding(padding))
+            }
+            is ProfileViewModel.ProfileUiState.LoadError -> {
+                ProfileLoadError(
+                    message = uiState.message,
+                    modifier = Modifier.padding(padding),
+                    onRetry = onRetryInitialLoad
+                )
+            }
+
+            ProfileViewModel.ProfileUiState.Idle,
+            ProfileViewModel.ProfileUiState.Submitting -> {
+                Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding)
@@ -136,12 +152,12 @@ fun ProfileScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         // Flow: jika data tidak memiliki avatar atau avatar = null -> icon saja
-                        if (profileImageUri.isNullOrBlank()) {
+                        if (avatarDisplayUrl.isNullOrBlank()) {
                             Icon(Icons.Default.Person, null, Modifier.size(80.dp), MaterialTheme.colorScheme.primary)
                         } else {
                             AsyncImage(
                                 model = ImageRequest.Builder(context)
-                                    .data(profileImageUri)
+                                    .data(avatarDisplayUrl)
                                     .crossfade(true)
                                     .build(),
                                 contentDescription = null,
@@ -214,7 +230,7 @@ fun ProfileScreen(
                         Spacer(modifier = Modifier.width(12.dp))
                         Button(
                             onClick = { onUpdateNickname(nickname) },
-                            enabled = uiState is ProfileViewModel.ProfileUiState.Idle,
+                            enabled = formEnabled,
                             shape = RoundedCornerShape(12.dp),
                             modifier = Modifier.height(56.dp),
                             colors = ButtonDefaults.buttonColors(
@@ -258,7 +274,7 @@ fun ProfileScreen(
                         Spacer(modifier = Modifier.width(12.dp))
                         Button(
                             onClick = { onUpdatePhone(phone) },
-                            enabled = uiState is ProfileViewModel.ProfileUiState.Idle,
+                            enabled = formEnabled,
                             shape = RoundedCornerShape(12.dp),
                             modifier = Modifier.height(56.dp),
                             colors = ButtonDefaults.buttonColors(
@@ -348,7 +364,46 @@ fun ProfileScreen(
                 }
                 
                 Spacer(modifier = Modifier.height(64.dp))
+                }
             }
+        }
+    }
+}
+
+@Composable
+private fun ProfileLoadError(
+    message: String,
+    modifier: Modifier = Modifier,
+    onRetry: () -> Unit
+) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Icon(
+            Icons.Default.CloudOff,
+            contentDescription = null,
+            modifier = Modifier.size(64.dp),
+            tint = MaterialTheme.colorScheme.error.copy(alpha = 0.8f)
+        )
+        Spacer(Modifier.height(16.dp))
+        Text(
+            text = "Profil tidak dapat dimuat",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = message,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(24.dp))
+        Button(onClick = onRetry) {
+            Text("Coba lagi")
         }
     }
 }

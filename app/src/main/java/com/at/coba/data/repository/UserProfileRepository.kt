@@ -12,7 +12,13 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.asRequestBody
+import retrofit2.HttpException
 import java.io.File
+
+sealed class ProfileFetchResult {
+    object Success : ProfileFetchResult()
+    data class Failure(val httpCode: Int?, val message: String?) : ProfileFetchResult()
+}
 
 object UserProfileRepository {
 
@@ -40,12 +46,15 @@ object UserProfileRepository {
         }
     }
 
-    suspend fun fetchAndSyncFullProfile(context: Context) {
-        try {
+    /**
+     * GET profile (Retrofit/OkHttp). Persists to Datastore only on 200 + parsed body.
+     */
+    suspend fun fetchAndSyncFullProfile(context: Context): ProfileFetchResult {
+        return try {
             val apiService = ApiClient.getApiService(context)
             val profile = apiService.getProfile()
             val dm = DataStoreManager(context.applicationContext)
-            
+
             dm.setUserProfileInfo(
                 email = profile.data.email,
                 phone = profile.data.phone,
@@ -54,12 +63,20 @@ object UserProfileRepository {
                 phoneVerified = profile.data.phoneVerified,
                 docsVerified = profile.data.docsVerified
             )
-            
-            profile.data.avatar?.let {
-                val resolved = resolveAvatarUrl(it)
+
+            val avatarRaw = profile.data.avatar?.trim().orEmpty()
+            if (avatarRaw.isEmpty()) {
+                dm.setProfileRemoteAvatarUrl(null)
+            } else {
+                val resolved = resolveAvatarUrl(avatarRaw)
                 cacheAvatarFromRemoteUrl(context, resolved)
             }
-        } catch (_: Exception) {}
+            ProfileFetchResult.Success
+        } catch (e: HttpException) {
+            ProfileFetchResult.Failure(e.code(), e.message())
+        } catch (e: Exception) {
+            ProfileFetchResult.Failure(null, e.message ?: e.toString())
+        }
     }
 
     fun resolveAvatarUrl(raw: String): String {
