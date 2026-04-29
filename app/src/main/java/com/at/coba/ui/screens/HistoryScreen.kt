@@ -37,7 +37,7 @@ data class HistoryItem(
     val createdAt: Long
 )
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterialApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HistoryScreen(viewModel: HistoryViewModel) {
     var statusFilter by remember { mutableStateOf("All") }
@@ -51,11 +51,6 @@ fun HistoryScreen(viewModel: HistoryViewModel) {
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val isPullRefreshing by viewModel.isPullRefreshing.collectAsStateWithLifecycle()
     val loadError by viewModel.error.collectAsStateWithLifecycle()
-
-    val pullRefreshState = rememberPullRefreshState(
-        refreshing = isPullRefreshing,
-        onRefresh = { viewModel.refreshFromPull() }
-    )
 
     LaunchedEffect(accountFilter) {
         viewModel.load(accountFilter)
