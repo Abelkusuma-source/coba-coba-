@@ -211,7 +211,9 @@ fun MainScreen(dataStoreManager: DataStoreManager) {
             popExitTransition = { slideOutHorizontally { it } + fadeOut() }
         ) {
             composable(Screen.Trade.route) { 
-                val tradeViewModel: TradeViewModel = viewModel(factory = TradeViewModel.Factory(dataStoreManager))
+                val tradeViewModel: TradeViewModel = viewModel(
+                    factory = TradeViewModel.Factory(dataStoreManager)
+                )
                 TradeScreen(tradeViewModel)
             }
             composable(Screen.History.route) {

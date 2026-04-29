@@ -14,6 +14,9 @@ import java.time.Instant
  */
 object TradeHistoryRepository {
 
+    /** API mengirim amount/profit dalam satuan ×100 (mis. minor unit); bagi untuk tampilan util. */
+    private const val AMOUNT_UTIL_SCALE = 100.0
+
     suspend fun fetchTradeDeals(
         context: Context,
         type: String,
@@ -112,7 +115,7 @@ object TradeHistoryRepository {
             ?: 0.0
 
         val payout = o.firstDouble("win", "payment", "payout")
-        val profit = if (payout != null) {
+        val profitRaw = if (payout != null) {
             payout - amount
         } else {
             o.firstDouble("profit", "profit_amount", "gain", "result_amount")
@@ -120,7 +123,18 @@ object TradeHistoryRepository {
                 ?: 0.0
         }
 
-        val createdMs = o.firstTimeMillis("created_at", "opened_at", "finished_at", "closed_at")
+        // Tampilan & urutan mengikuti waktu tutup deal, buka hanya sebagai fallback.
+        val createdMs = o.firstTimeMillis(
+            "closed_at",
+            "finished_at",
+            "completed_at",
+            "deal_closed_at",
+            "close_time",
+            "ended_at",
+            "settled_at",
+            "opened_at",
+            "created_at"
+        )
             ?: System.currentTimeMillis()
 
         return HistoryItem(
@@ -130,8 +144,8 @@ object TradeHistoryRepository {
             type = typeLabel,
             accountMode = accountMode,
             currency = currency,
-            amount = amount,
-            profit = profit,
+            amount = amount / AMOUNT_UTIL_SCALE,
+            profit = profitRaw / AMOUNT_UTIL_SCALE,
             createdAt = createdMs
         )
     }
