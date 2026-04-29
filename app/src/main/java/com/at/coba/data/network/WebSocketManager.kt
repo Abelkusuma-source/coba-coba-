@@ -33,6 +33,9 @@ class WebSocketManager(private val dataStoreManager: DataStoreManager) {
     private var pingJob: Job? = null
     private var refCounter = 1
 
+    @Volatile
+    private var assetChannelRic: String = AssetSocketManager.DEFAULT_RIC
+
     private val _connectionStatus = MutableStateFlow<WebSocketStatus>(WebSocketStatus.Disconnected)
     val connectionStatus: StateFlow<WebSocketStatus> = _connectionStatus.asStateFlow()
 
@@ -114,7 +117,27 @@ class WebSocketManager(private val dataStoreManager: DataStoreManager) {
         stopTimers()
     }
 
+    /**
+     * Selaraskan channel Phoenix `asset:` / `range_stream:` dengan RIC terpilih.
+     * Saat socket sudah terhubung, leave channel lama lalu join yang baru.
+     */
+    fun setAssetChannelRic(ric: String) {
+        val next = ric.trim()
+        if (next.isEmpty()) return
+        val prev = assetChannelRic
+        if (prev == next) return
+        assetChannelRic = next
+        val ws = webSocket
+        if (ws != null && _connectionStatus.value is WebSocketStatus.Connected) {
+            ws.send("""{"topic":"asset:$prev","event":"phx_leave","payload":{},"ref":"${refCounter++}"}""")
+            ws.send("""{"topic":"range_stream:$prev","event":"phx_leave","payload":{},"ref":"${refCounter++}"}""")
+            ws.send("""{"topic":"asset:$next","event":"phx_join","payload":{},"ref":"${refCounter++}","join_ref":"${refCounter - 1}"}""")
+            ws.send("""{"topic":"range_stream:$next","event":"phx_join","payload":{},"ref":"${refCounter++}","join_ref":"${refCounter - 1}"}""")
+        }
+    }
+
     private fun sendSubscribeMessages(webSocket: WebSocket) {
+        val ric = assetChannelRic
         val messages = listOf(
             """{"topic":"connection","event":"phx_join","payload":{},"ref":"${refCounter++}","join_ref":"1"}""",
             """{"topic":"bo","event":"phx_join","payload":{},"ref":"${refCounter++}","join_ref":"${refCounter - 1}"}""",
@@ -125,8 +148,8 @@ class WebSocketManager(private val dataStoreManager: DataStoreManager) {
             """{"topic":"cfd_zero_spread","event":"phx_join","payload":{},"ref":"${refCounter++}","join_ref":"${refCounter - 1}"}""",
             """{"topic":"asset","event":"phx_join","payload":{},"ref":"${refCounter++}","join_ref":"${refCounter - 1}"}""",
             """{"topic":"copy_trading","event":"phx_join","payload":{},"ref":"${refCounter++}","join_ref":"${refCounter - 1}"}""",
-            """{"topic":"asset:Z-CRY/IDX","event":"phx_join","payload":{},"ref":"${refCounter++}","join_ref":"${refCounter - 1}"}""",
-            """{"topic":"range_stream:Z-CRY/IDX","event":"phx_join","payload":{},"ref":"${refCounter++}","join_ref":"${refCounter - 1}"}"""
+            """{"topic":"asset:$ric","event":"phx_join","payload":{},"ref":"${refCounter++}","join_ref":"${refCounter - 1}"}""",
+            """{"topic":"range_stream:$ric","event":"phx_join","payload":{},"ref":"${refCounter++}","join_ref":"${refCounter - 1}"}"""
         )
         messages.forEach { webSocket.send(it) }
     }

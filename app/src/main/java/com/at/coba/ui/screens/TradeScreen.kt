@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -27,6 +28,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -49,6 +51,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.at.coba.R
+import com.at.coba.data.repository.AssetChoice
 import com.at.coba.data.TradingConfig
 import com.at.coba.data.TradingStrategy
 import com.at.coba.data.network.WebSocketStatus
@@ -73,11 +76,12 @@ fun TradeScreen(viewModel: TradeViewModel) {
     val tradeSignal by viewModel.tradeSignal.collectAsStateWithLifecycle(TradeSignal.SCANNING)
     val indicatorState by viewModel.indicatorState.collectAsStateWithLifecycle(IndicatorState())
     val tradingConfig by viewModel.tradingConfig.collectAsStateWithLifecycle()
+    val assetChoices by viewModel.assetChoices.collectAsStateWithLifecycle()
+    val selectedAsset by viewModel.selectedAsset.collectAsStateWithLifecycle()
+    val isAssetsLoading by viewModel.isAssetsLoading.collectAsStateWithLifecycle()
+    val assetsLoadError by viewModel.assetsLoadError.collectAsStateWithLifecycle()
     var showConfigSheet by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
-
-    // Asset pair selection is not yet wired to sockets (display only).
-    var assetPair by remember { mutableStateOf("CRYPTO IDX") }
 
     val isRunning = wsStatus !is WebSocketStatus.Disconnected || asStatus !is WebSocketStatus.Disconnected
     val scrollState = rememberScrollState()
@@ -168,17 +172,32 @@ fun TradeScreen(viewModel: TradeViewModel) {
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // 3. ASSET PAIR dropdown
-        LabeledDropdown(
-            label = "ASSET PAIR",
-            options = listOf(
-                "CRYPTO IDX" to "CRYPTO IDX",
-                "AUD / USD" to "AUD / USD",
-                "ASIA / X" to "ASIA / X"
-            ),
-            selectedValue = assetPair,
-            onSelect = { assetPair = it }
+        // 3. ASSET PAIR (REST `/bo-assets/v6/assets` + pencarian di dropdown)
+        SearchableAssetPairDropdown(
+            choices = assetChoices,
+            selected = selectedAsset,
+            isLoading = isAssetsLoading,
+            onSelect = { viewModel.selectAssetPair(it) }
         )
+        assetsLoadError?.let { err ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = err,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.weight(1f)
+                )
+                TextButton(onClick = { viewModel.retryLoadAssetChoices() }) {
+                    Text("Coba lagi")
+                }
+            }
+        }
 
         Spacer(modifier = Modifier.height(12.dp))
 
@@ -258,6 +277,130 @@ fun TradeScreen(viewModel: TradeViewModel) {
         
         Spacer(modifier = Modifier.height(32.dp))
     }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SearchableAssetPairDropdown(
+    choices: List<AssetChoice>,
+    selected: AssetChoice?,
+    isLoading: Boolean,
+    onSelect: (AssetChoice) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    var searchQuery by remember { mutableStateOf("") }
+
+    val filtered by remember(choices, searchQuery) {
+        derivedStateOf {
+            if (searchQuery.isBlank()) choices
+            else choices.filter {
+                it.label.contains(searchQuery, ignoreCase = true) ||
+                    it.ric.contains(searchQuery, ignoreCase = true)
+            }
+        }
+    }
+
+    LaunchedEffect(expanded) {
+        if (!expanded) searchQuery = ""
+    }
+
+    LaunchedEffect(isLoading) {
+        if (isLoading) expanded = false
+    }
+
+    val anchorText = when {
+        isLoading -> "Memuat daftar aset…"
+        selected != null -> selected.label
+        else -> "Pilih pasangan aset"
+    }
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = "ASSET PAIR",
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
+        )
+        ExposedDropdownMenuBox(
+            expanded = expanded && !isLoading,
+            onExpandedChange = { if (!isLoading) expanded = it }
+        ) {
+            OutlinedTextField(
+                value = anchorText,
+                onValueChange = {},
+                readOnly = true,
+                enabled = !isLoading,
+                trailingIcon = {
+                    if (isLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier
+                                .padding(end = 12.dp)
+                                .width(20.dp)
+                                .height(20.dp),
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
+                    }
+                },
+                modifier = Modifier
+                    .menuAnchor(type = MenuAnchorType.PrimaryNotEditable, enabled = !isLoading)
+                    .fillMaxWidth(),
+                shape = RoundedCornerShape(8.dp),
+                textStyle = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold)
+            )
+
+            ExposedDropdownMenu(
+                expanded = expanded && !isLoading,
+                onDismissRequest = { expanded = false },
+                modifier = Modifier.heightIn(max = 320.dp)
+            ) {
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    placeholder = { Text("Cari nama atau RIC") },
+                    singleLine = true,
+                    shape = RoundedCornerShape(8.dp)
+                )
+                HorizontalDivider()
+                if (filtered.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "Tidak ada hasil",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                } else {
+                    filtered.forEach { choice ->
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    choice.label,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            },
+                            onClick = {
+                                onSelect(choice)
+                                expanded = false
+                            },
+                            contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 

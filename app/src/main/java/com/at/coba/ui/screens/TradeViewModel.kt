@@ -1,5 +1,6 @@
 package com.at.coba.ui.screens
 
+import android.app.Application
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -12,6 +13,8 @@ import com.at.coba.data.network.WebSocketManager
 import com.at.coba.data.network.WebSocketStatus
 import com.at.coba.data.network.AssetTick
 import com.at.coba.data.model.Candle
+import com.at.coba.data.repository.AssetChoice
+import com.at.coba.data.repository.AssetsRepository
 import com.at.coba.util.CandleManager
 import com.at.coba.util.IndicatorMath
 import com.at.coba.util.PriceActionOutcome
@@ -41,10 +44,23 @@ data class IndicatorState(
 )
 
 class TradeViewModel(
+    private val application: Application,
     private val webSocketManager: WebSocketManager,
     private val assetSocketManager: AssetSocketManager,
     private val dataStoreManager: DataStoreManager
 ) : ViewModel() {
+
+    private val _assetChoices = MutableStateFlow<List<AssetChoice>>(emptyList())
+    val assetChoices: StateFlow<List<AssetChoice>> = _assetChoices.asStateFlow()
+
+    private val _selectedAsset = MutableStateFlow<AssetChoice?>(null)
+    val selectedAsset: StateFlow<AssetChoice?> = _selectedAsset.asStateFlow()
+
+    private val _assetsLoadError = MutableStateFlow<String?>(null)
+    val assetsLoadError: StateFlow<String?> = _assetsLoadError.asStateFlow()
+
+    private val _isAssetsLoading = MutableStateFlow(false)
+    val isAssetsLoading: StateFlow<Boolean> = _isAssetsLoading.asStateFlow()
 
     // Timeframe aktif (5s, 10s, 15s, 30s, 60s)
     private val _selectedTimeframe = MutableStateFlow(5)
@@ -82,6 +98,9 @@ class TradeViewModel(
     val tickData: StateFlow<AssetTick?> = assetSocketManager.tickData
 
     init {
+        viewModelScope.launch {
+            loadAssetChoices()
+        }
         // Observasi tickData untuk mengupdate candleHistory secara real-time
         viewModelScope.launch {
             assetSocketManager.tickData.collect { tick ->
@@ -92,12 +111,49 @@ class TradeViewModel(
                         serverTime = it.time,
                         timeframeSeconds = currentTF
                     )
-                    
+
                     // Hitung Indikator & Sinyal
                     calculateSignals()
                 }
             }
         }
+    }
+
+    suspend fun loadAssetChoices() {
+        _isAssetsLoading.value = true
+        _assetsLoadError.value = null
+        AssetsRepository.fetchChoices(application).fold(
+            onSuccess = { list ->
+                _assetChoices.value = list
+                if (_selectedAsset.value == null && list.isNotEmpty()) {
+                    val first = list.first()
+                    _selectedAsset.value = first
+                    assetSocketManager.setActiveRic(first.ric)
+                    webSocketManager.setAssetChannelRic(first.ric)
+                }
+            },
+            onFailure = { e ->
+                _assetsLoadError.value = e.message ?: e.javaClass.simpleName
+            }
+        )
+        _isAssetsLoading.value = false
+    }
+
+    fun retryLoadAssetChoices() {
+        viewModelScope.launch { loadAssetChoices() }
+    }
+
+    /**
+     * Pilih pasangan aset: sinkronkan subscribe AS + channel Phoenix, reset candle agar harga/chart mengikuti RIC baru.
+     */
+    fun selectAssetPair(choice: AssetChoice) {
+        if (_selectedAsset.value?.ric == choice.ric) return
+        _selectedAsset.value = choice
+        assetSocketManager.setActiveRic(choice.ric)
+        webSocketManager.setAssetChannelRic(choice.ric)
+        candleManager.clear()
+        _tradeSignal.value = TradeSignal.SCANNING
+        _indicatorState.value = IndicatorState()
     }
 
     private fun calculateSignals() {
@@ -299,12 +355,14 @@ class TradeViewModel(
     }
 
     class Factory(
+        private val application: Application,
         private val dataStoreManager: DataStoreManager
     ) : ViewModelProvider.Factory {
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             if (modelClass.isAssignableFrom(TradeViewModel::class.java)) {
                 @Suppress("UNCHECKED_CAST")
                 return TradeViewModel(
+                    application,
                     WebSocketManager(dataStoreManager),
                     AssetSocketManager(dataStoreManager),
                     dataStoreManager

@@ -14,6 +14,7 @@ import okhttp3.Request
 import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
+import org.json.JSONArray
 import java.util.concurrent.TimeUnit
 
 data class AssetTick(
@@ -25,6 +26,9 @@ class AssetSocketManager(private val dataStoreManager: DataStoreManager) {
 
     private var webSocket: WebSocket? = null
     private val scope = CoroutineScope(Dispatchers.IO)
+
+    private val ricLock = Any()
+    private var activeRic: String = DEFAULT_RIC
 
     private val _connectionStatus = MutableStateFlow<WebSocketStatus>(WebSocketStatus.Disconnected)
     val connectionStatus: StateFlow<WebSocketStatus> = _connectionStatus.asStateFlow()
@@ -38,6 +42,9 @@ class AssetSocketManager(private val dataStoreManager: DataStoreManager) {
     companion object {
         private const val AS_URL = "wss://as.stockity.id/"
 
+        /** Fallback / RIC awal bila daftar aset dari API belum tersedia. */
+        const val DEFAULT_RIC = "Z-CRY/IDX"
+
         private val TIME_FIELD_PREFIXES = arrayOf(
             "\"time\":",
             "\"timestamp\":",
@@ -48,6 +55,28 @@ class AssetSocketManager(private val dataStoreManager: DataStoreManager) {
 
         /** Values below this are treated as Unix seconds; otherwise milliseconds. */
         private const val MILLIS_THRESHOLD = 1_000_000_000_000L
+    }
+
+    fun getActiveRic(): String = synchronized(ricLock) { activeRic }
+
+    /**
+     * Mengatur RIC untuk langganan tick AS. Jika socket sudah terhubung, mengirim ulang `subscribe`.
+     */
+    fun setActiveRic(ric: String) {
+        val trimmed = ric.trim()
+        if (trimmed.isEmpty()) return
+
+        val needsResubscribe: Boolean
+        synchronized(ricLock) {
+            if (activeRic == trimmed) return
+            activeRic = trimmed
+            needsResubscribe =
+                webSocket != null && _connectionStatus.value is WebSocketStatus.Connected
+        }
+        _tickData.value = null
+        if (needsResubscribe) {
+            webSocket?.let { sendAssetSubscribe(it) }
+        }
     }
 
     fun connect(context: Context) {
@@ -119,7 +148,13 @@ class AssetSocketManager(private val dataStoreManager: DataStoreManager) {
      */
     private fun sendSubscribeMessages(webSocket: WebSocket) {
         webSocket.send("""{"action":"subscribe","event_type":"reconnect_request"}""")
-        webSocket.send("""{"action":"subscribe","rics":["Z-CRY/IDX"]}""")
+        sendAssetSubscribe(webSocket)
+    }
+
+    private fun sendAssetSubscribe(webSocket: WebSocket) {
+        val ric = synchronized(ricLock) { activeRic }
+        val ricsJson = JSONArray().put(ric).toString()
+        webSocket.send("""{"action":"subscribe","rics":$ricsJson}""")
     }
 
     private fun parseTick(json: String) {

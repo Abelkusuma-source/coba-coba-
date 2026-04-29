@@ -212,7 +212,10 @@ fun MainScreen(dataStoreManager: DataStoreManager) {
         ) {
             composable(Screen.Trade.route) { 
                 val tradeViewModel: TradeViewModel = viewModel(
-                    factory = TradeViewModel.Factory(dataStoreManager)
+                    factory = TradeViewModel.Factory(
+                        LocalContext.current.applicationContext as Application,
+                        dataStoreManager
+                    )
                 )
                 TradeScreen(tradeViewModel)
             }
@@ -239,7 +242,12 @@ fun MainScreen(dataStoreManager: DataStoreManager) {
                 val uiState by profileViewModel.uiState.collectAsStateWithLifecycle()
                 val isPullRefreshing by profileViewModel.isPullRefreshing.collectAsStateWithLifecycle()
 
-                val tradeViewModel: TradeViewModel = viewModel(factory = TradeViewModel.Factory(dataStoreManager))
+                val tradeViewModel: TradeViewModel = viewModel(
+                    factory = TradeViewModel.Factory(
+                        LocalContext.current.applicationContext as Application,
+                        dataStoreManager
+                    )
+                )
 
                 ProfileScreen(
                     themeMode = currentThemeMode,
