@@ -13,7 +13,7 @@ class TradingConfigValidatorTest {
         val r = TradingConfigValidator.validateTradingConfig(
             TradingStrategy.MACD_RSI,
             rsiPeriod = "2", macdFast = "2", macdSlow = "3", macdSignal = "2",
-            bbPeriod = "5", bbStdDev = "0.5"
+            bbPeriod = "ignored", bbStdDev = "ignored"
         )
         assertTrue(r is ValidationResult.Valid)
     }
@@ -23,7 +23,7 @@ class TradingConfigValidatorTest {
         val r = TradingConfigValidator.validateTradingConfig(
             TradingStrategy.MACD_RSI,
             rsiPeriod = "101", macdFast = "12", macdSlow = "26", macdSignal = "9",
-            bbPeriod = "20", bbStdDev = "2.0"
+            bbPeriod = "", bbStdDev = ""
         ) as? ValidationResult.Invalid
         assertNotNull(r)
         assertEquals(TradingConfigErrorCode.RsiOutOfRange, r!!.byField[TradingConfigField.RSI_PERIOD]?.code)
@@ -34,7 +34,7 @@ class TradingConfigValidatorTest {
         val r = TradingConfigValidator.validateTradingConfig(
             TradingStrategy.MACD_RSI,
             rsiPeriod = " ", macdFast = "12", macdSlow = "26", macdSignal = "9",
-            bbPeriod = "20", bbStdDev = "2.0"
+            bbPeriod = "", bbStdDev = ""
         ) as? ValidationResult.Invalid
         assertNotNull(r)
         assertEquals(TradingConfigErrorCode.Required, r!!.byField[TradingConfigField.RSI_PERIOD]?.code)
@@ -45,7 +45,7 @@ class TradingConfigValidatorTest {
         val r = TradingConfigValidator.validateTradingConfig(
             TradingStrategy.MACD_RSI,
             rsiPeriod = "14", macdFast = "12", macdSlow = "12", macdSignal = "9",
-            bbPeriod = "20", bbStdDev = "2.0"
+            bbPeriod = "", bbStdDev = ""
         ) as? ValidationResult.Invalid
         assertNotNull(r)
         assertEquals(TradingConfigErrorCode.MacdOrderInvalid, r!!.byField[TradingConfigField.MACD_FAST]?.code)
@@ -56,7 +56,7 @@ class TradingConfigValidatorTest {
         val r = TradingConfigValidator.validateTradingConfig(
             TradingStrategy.MACD_RSI,
             rsiPeriod = "14", macdFast = "30", macdSlow = "12", macdSignal = "9",
-            bbPeriod = "20", bbStdDev = "2.0"
+            bbPeriod = "", bbStdDev = ""
         ) as? ValidationResult.Invalid
         assertNotNull(r)
         assertTrue(r!!.byField.containsKey(TradingConfigField.MACD_FAST))
@@ -64,13 +64,12 @@ class TradingConfigValidatorTest {
     }
 
     @Test
-    fun bollinger_onlyRsiAndBb() {
+    fun bollinger_onlyBbParams_macdRsiIgnored() {
         val valid = TradingConfigValidator.validateTradingConfig(
             TradingStrategy.BOLLINGER,
-            rsiPeriod = "14", macdFast = "99", macdSlow = "1", macdSignal = "1",
+            rsiPeriod = "", macdFast = "99", macdSlow = "1", macdSignal = "1",
             bbPeriod = "20", bbStdDev = "2.0"
         )
-        // MACD not validated; invalid macd text ignored
         assertTrue(valid is ValidationResult.Valid)
     }
 
@@ -78,7 +77,7 @@ class TradingConfigValidatorTest {
     fun bollinger_bbPeriodBelowMin() {
         val r = TradingConfigValidator.validateTradingConfig(
             TradingStrategy.BOLLINGER,
-            rsiPeriod = "14", macdFast = "x", macdSlow = "x", macdSignal = "x",
+            rsiPeriod = "", macdFast = "x", macdSlow = "x", macdSignal = "x",
             bbPeriod = "4", bbStdDev = "2.0"
         ) as? ValidationResult.Invalid
         assertNotNull(r)
@@ -94,23 +93,77 @@ class TradingConfigValidatorTest {
     }
 
     @Test
-    fun bbStdEdge_valid() {
+    fun bbStdEdge_valid_bollinger() {
         val low = TradingConfigValidator.validateTradingConfig(
-            TradingStrategy.MACD_RSI, "14", "12", "26", "9", "20", "0.5"
+            TradingStrategy.BOLLINGER, "", "", "", "", "20", "0.5"
         )
         val high = TradingConfigValidator.validateTradingConfig(
-            TradingStrategy.MACD_RSI, "14", "12", "26", "9", "20", "4.0"
+            TradingStrategy.BOLLINGER, "", "", "", "", "20", "4.0"
         )
         assertTrue(low is ValidationResult.Valid)
         assertTrue(high is ValidationResult.Valid)
     }
 
     @Test
-    fun bbStdTooLow_invalid() {
+    fun bbStdTooLow_invalid_bollinger() {
         val r = TradingConfigValidator.validateTradingConfig(
-            TradingStrategy.MACD_RSI, "14", "12", "26", "9", "20", "0.4"
+            TradingStrategy.BOLLINGER, "", "", "", "", "20", "0.4"
         ) as? ValidationResult.Invalid
         assertNotNull(r)
         assertEquals(TradingConfigErrorCode.BbStdOutOfRange, r!!.byField[TradingConfigField.BB_STDDEV]?.code)
+    }
+
+    @Test
+    fun mergeMacdRsi_preservesBbFromBaseline() {
+        val baseline = com.at.coba.data.TradingConfig(
+            rsiPeriod = 9,
+            macdFast = 1,
+            macdSlow = 2,
+            macdSignal = 3,
+            bbPeriod = 99,
+            bbStdDevMultiplier = 3.5f,
+            strategy = TradingStrategy.MACD_RSI
+        )
+        val merged = TradingConfigValidator.mergeToTradingConfig(
+            TradingStrategy.MACD_RSI,
+            baseline,
+            rsiPeriod = "14",
+            macdFast = "12",
+            macdSlow = "26",
+            macdSignal = "9",
+            bbPeriod = "5",
+            bbStdDev = "0.5"
+        )
+        assertEquals(99, merged.bbPeriod)
+        assertEquals(3.5f, merged.bbStdDevMultiplier)
+    }
+
+    @Test
+    fun mergeBollinger_preservesRsiAndMacdFromBaseline() {
+        val baseline = com.at.coba.data.TradingConfig(
+            rsiPeriod = 21,
+            macdFast = 12,
+            macdSlow = 26,
+            macdSignal = 9,
+            bbPeriod = 1,
+            bbStdDevMultiplier = 1f,
+            strategy = TradingStrategy.BOLLINGER
+        )
+        val merged = TradingConfigValidator.mergeToTradingConfig(
+            TradingStrategy.BOLLINGER,
+            baseline,
+            rsiPeriod = "99",
+            macdFast = "99",
+            macdSlow = "99",
+            macdSignal = "99",
+            bbPeriod = "20",
+            bbStdDev = "2.0"
+        )
+        assertEquals(21, merged.rsiPeriod)
+        assertEquals(12, merged.macdFast)
+        assertEquals(26, merged.macdSlow)
+        assertEquals(9, merged.macdSignal)
+        assertEquals(20, merged.bbPeriod)
+        assertEquals(2.0f, merged.bbStdDevMultiplier)
     }
 }

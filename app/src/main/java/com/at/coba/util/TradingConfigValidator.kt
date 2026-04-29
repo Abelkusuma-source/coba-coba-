@@ -73,8 +73,6 @@ object TradingConfigValidator {
                 checkInt(TradingConfigField.MACD_FAST, macdFast, MACD_FAST_MIN..MACD_FAST_MAX, TradingConfigErrorCode.MacdFastOutOfRange, issues, ::add)
                 checkInt(TradingConfigField.MACD_SLOW, macdSlow, MACD_SLOW_MIN..MACD_SLOW_MAX, TradingConfigErrorCode.MacdSlowOutOfRange, issues, ::add)
                 checkInt(TradingConfigField.MACD_SIGNAL, macdSignal, MACD_SIGNAL_MIN..MACD_SIGNAL_MAX, TradingConfigErrorCode.MacdSignalOutOfRange, issues, ::add)
-                checkInt(TradingConfigField.BB_PERIOD, bbPeriod, BB_PERIOD_MIN..BB_PERIOD_MAX, TradingConfigErrorCode.BbPeriodOutOfRange, issues, ::add)
-                checkFloat(TradingConfigField.BB_STDDEV, bbStdDev, issues, ::add)
 
                 val f = macdFast.trim().toIntOrNull()
                 val s = macdSlow.trim().toIntOrNull()
@@ -84,7 +82,6 @@ object TradingConfigValidator {
                 }
             }
             TradingStrategy.BOLLINGER -> {
-                checkInt(TradingConfigField.RSI_PERIOD, rsiPeriod, RSI_MIN..RSI_MAX, TradingConfigErrorCode.RsiOutOfRange, issues, ::add)
                 checkInt(TradingConfigField.BB_PERIOD, bbPeriod, BB_PERIOD_MIN..BB_PERIOD_MAX, TradingConfigErrorCode.BbPeriodOutOfRange, issues, ::add)
                 checkFloat(TradingConfigField.BB_STDDEV, bbStdDev, issues, ::add)
             }
@@ -134,8 +131,8 @@ object TradingConfigValidator {
     }
 
     /**
-     * Build persisted config after a successful [validateTradingConfig]. [baseline] holds MACD fields when
-     * the active strategy does not show those inputs (e.g. Bollinger).
+     * Build persisted config after a successful [validateTradingConfig]. [baseline] keeps fields
+     * not edited for the active strategy (BB saat MACD+RSI; RSI & MACD saat Bollinger).
      */
     fun mergeToTradingConfig(
         strategy: TradingStrategy,
@@ -152,12 +149,12 @@ object TradingConfigValidator {
             macdFast = macdFast.trim().toInt(),
             macdSlow = macdSlow.trim().toInt(),
             macdSignal = macdSignal.trim().toInt(),
-            bbPeriod = bbPeriod.trim().toInt(),
-            bbStdDevMultiplier = bbStdDev.trim().toFloat(),
+            bbPeriod = baseline.bbPeriod,
+            bbStdDevMultiplier = baseline.bbStdDevMultiplier,
             strategy = baseline.strategy
         )
         TradingStrategy.BOLLINGER -> TradingConfig(
-            rsiPeriod = rsiPeriod.trim().toInt(),
+            rsiPeriod = baseline.rsiPeriod,
             macdFast = baseline.macdFast,
             macdSlow = baseline.macdSlow,
             macdSignal = baseline.macdSignal,

@@ -23,9 +23,6 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -80,24 +77,10 @@ fun TradeScreen(viewModel: TradeViewModel) {
     val selectedAsset by viewModel.selectedAsset.collectAsStateWithLifecycle()
     val isAssetsLoading by viewModel.isAssetsLoading.collectAsStateWithLifecycle()
     val assetsLoadError by viewModel.assetsLoadError.collectAsStateWithLifecycle()
-    var showConfigSheet by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
 
     val isRunning = wsStatus !is WebSocketStatus.Disconnected || asStatus !is WebSocketStatus.Disconnected
     val scrollState = rememberScrollState()
-
-    if (showConfigSheet) {
-        TradingConfigSheet(
-            config = tradingConfig,
-            strategy = tradingConfig.strategy,
-            onDismiss = { showConfigSheet = false },
-            onSave = { newConfig ->
-                viewModel.updateConfig(newConfig)
-                showConfigSheet = false
-            },
-            snackbarHostState = snackbarHostState
-        )
-    }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) }
@@ -113,7 +96,6 @@ fun TradeScreen(viewModel: TradeViewModel) {
         // Top Bar
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
@@ -121,12 +103,6 @@ fun TradeScreen(viewModel: TradeViewModel) {
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold
             )
-            IconButton(onClick = { showConfigSheet = true }) {
-                Icon(
-                    imageVector = Icons.Default.Settings,
-                    contentDescription = "Settings"
-                )
-            }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -208,6 +184,45 @@ fun TradeScreen(viewModel: TradeViewModel) {
             selectedValue = tradingConfig.strategy,
             onSelect = { viewModel.setTradingStrategy(it) }
         )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // 4b. Konfigurasi indikator sesuai strategi (langsung di layar; sama validasi/simpan dengan sheet Pengaturan)
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+            ),
+            shape = RoundedCornerShape(12.dp)
+        ) {
+            TradingConfigStrategyParameters(
+                config = tradingConfig,
+                strategy = tradingConfig.strategy,
+                snackbarHostState = snackbarHostState,
+                onSave = { viewModel.updateConfig(it) },
+                onDirtyChange = { },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 12.dp),
+                header = { onResetDefaults ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Konfigurasi indikator",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        TextButton(onClick = onResetDefaults) {
+                            Text(stringResource(R.string.trading_config_reset_to_defaults))
+                        }
+                    }
+                }
+            )
+        }
 
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -460,12 +475,15 @@ private fun <T> LabeledDropdown(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TradingConfigSheet(
+private fun TradingConfigStrategyParameters(
     config: TradingConfig,
     strategy: TradingStrategy,
-    onDismiss: () -> Unit,
+    snackbarHostState: SnackbarHostState,
     onSave: (TradingConfig) -> Unit,
-    snackbarHostState: SnackbarHostState
+    onDirtyChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+    verticalArrangement: Arrangement.Vertical = Arrangement.spacedBy(8.dp),
+    header: @Composable (onResetDefaults: () -> Unit) -> Unit = { _ -> }
 ) {
     val context = LocalContext.current
     var rsiPeriod by remember(config) { mutableStateOf(config.rsiPeriod.toString()) }
@@ -475,28 +493,27 @@ fun TradingConfigSheet(
     var bbPeriod by remember(config) { mutableStateOf(config.bbPeriod.toString()) }
     var bbStdDev by remember(config) { mutableStateOf(config.bbStdDevMultiplier.toString()) }
 
-    val isDirty by remember(rsiPeriod, macdFast, macdSlow, macdSignal, bbPeriod, bbStdDev, config) {
+    val isDirty by remember(rsiPeriod, macdFast, macdSlow, macdSignal, bbPeriod, bbStdDev, config, strategy) {
         derivedStateOf {
-            rsiPeriod != config.rsiPeriod.toString() ||
-                macdFast != config.macdFast.toString() ||
-                macdSlow != config.macdSlow.toString() ||
-                macdSignal != config.macdSignal.toString() ||
-                bbPeriod != config.bbPeriod.toString() ||
-                bbStdDev != config.bbStdDevMultiplier.toString()
-        }
-    }
-    var showDiscard by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
-    val sheetState = rememberModalBottomSheetState(
-        confirmValueChange = { target ->
-            if (target == SheetValue.Hidden && isDirty) {
-                showDiscard = true
-                false
-            } else {
-                true
+            when (strategy) {
+                TradingStrategy.MACD_RSI ->
+                    rsiPeriod != config.rsiPeriod.toString() ||
+                        macdFast != config.macdFast.toString() ||
+                        macdSlow != config.macdSlow.toString() ||
+                        macdSignal != config.macdSignal.toString()
+                TradingStrategy.BOLLINGER ->
+                    bbPeriod != config.bbPeriod.toString() ||
+                        bbStdDev != config.bbStdDevMultiplier.toString()
+                TradingStrategy.PRICE_ACTION -> false
             }
         }
-    )
+    }
+
+    LaunchedEffect(isDirty) {
+        onDirtyChange(isDirty)
+    }
+
+    val scope = rememberCoroutineScope()
     val validation by remember(
         strategy,
         rsiPeriod,
@@ -525,127 +542,83 @@ fun TradingConfigSheet(
     val fBbP = remember { FocusRequester() }
     val fBbStd = remember { FocusRequester() }
 
-    if (showDiscard) {
-        AlertDialog(
-            onDismissRequest = { showDiscard = false },
-            title = { Text(stringResource(R.string.trading_config_discard_title)) },
-            confirmButton = {
-                TextButton(onClick = {
-                    showDiscard = false
-                    onDismiss()
-                }) { Text(stringResource(R.string.trading_config_discard)) }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDiscard = false }) {
-                    Text(stringResource(R.string.trading_config_keep_editing))
-                }
-            }
+    fun applyConfig() {
+        if (!isFormValid) return
+        onSave(
+            TradingConfigValidator.mergeToTradingConfig(
+                strategy, config, rsiPeriod, macdFast, macdSlow, macdSignal, bbPeriod, bbStdDev
+            )
         )
     }
 
-    fun applyConfig() {
-        if (!isFormValid) return
-        onSave(TradingConfigValidator.mergeToTradingConfig(strategy, config, rsiPeriod, macdFast, macdSlow, macdSignal, bbPeriod, bbStdDev))
+    fun resetFieldsToDefaults() {
+        val d = TradingConfig().copy(strategy = config.strategy)
+        rsiPeriod = d.rsiPeriod.toString()
+        macdFast = d.macdFast.toString()
+        macdSlow = d.macdSlow.toString()
+        macdSignal = d.macdSignal.toString()
+        bbPeriod = d.bbPeriod.toString()
+        bbStdDev = d.bbStdDevMultiplier.toString()
+        scope.launch {
+            snackbarHostState.showSnackbar(
+                message = context.getString(R.string.trading_config_restored_snackbar)
+            )
+        }
     }
 
-    ModalBottomSheet(
-        onDismissRequest = {
-            if (isDirty) showDiscard = true
-            else onDismiss()
-        },
-        sheetState = sheetState
+    Column(
+        modifier = modifier,
+        verticalArrangement = verticalArrangement
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .padding(bottom = 32.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = stringResource(R.string.trading_config_title),
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold
-                )
-                TextButton(
-                    onClick = {
-                        val d = TradingConfig().copy(strategy = config.strategy)
-                        rsiPeriod = d.rsiPeriod.toString()
-                        macdFast = d.macdFast.toString()
-                        macdSlow = d.macdSlow.toString()
-                        macdSignal = d.macdSignal.toString()
-                        bbPeriod = d.bbPeriod.toString()
-                        bbStdDev = d.bbStdDevMultiplier.toString()
-                        scope.launch {
-                            snackbarHostState.showSnackbar(
-                                message = context.getString(R.string.trading_config_restored_snackbar)
-                            )
-                        }
-                    }
-                ) { Text(stringResource(R.string.trading_config_reset_to_defaults)) }
-            }
+        header(::resetFieldsToDefaults)
 
-            if (strategy == TradingStrategy.PRICE_ACTION) {
-                Text(
-                    text = stringResource(R.string.trading_config_price_action_note),
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            } else {
-                val muted = MaterialTheme.colorScheme.onSurfaceVariant
-                val err = MaterialTheme.colorScheme.error
+        if (strategy == TradingStrategy.PRICE_ACTION) {
+            Text(
+                text = stringResource(R.string.trading_config_price_action_note),
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        } else {
+            val muted = MaterialTheme.colorScheme.onSurfaceVariant
+            val err = MaterialTheme.colorScheme.error
 
-                OutlinedTextField(
-                    value = rsiPeriod,
-                    onValueChange = { rsiPeriod = filterInt(it) },
-                    label = { Text(stringResource(R.string.trading_config_label_rsi)) },
-                    isError = errorMap[TradingConfigField.RSI_PERIOD] != null,
-                    supportingText = {
-                        Column {
-                            val i = errorMap[TradingConfigField.RSI_PERIOD]
-                            if (i != null) {
-                                Text(
-                                    text = tradingConfigIssueString(i, TradingConfigField.RSI_PERIOD),
-                                    color = err
-                                )
-                            } else {
-                                Text(
-                                    stringResource(
-                                        R.string.trading_config_range_rsi,
-                                        TradingConfigValidator.RSI_MIN,
-                                        TradingConfigValidator.RSI_MAX
-                                    ),
-                                    color = muted,
-                                    style = MaterialTheme.typography.bodySmall
-                                )
-                            }
-                        }
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .focusRequester(fRsi),
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Number,
-                        imeAction = if (strategy == TradingStrategy.MACD_RSI) ImeAction.Next else
-                            if (strategy == TradingStrategy.BOLLINGER) ImeAction.Next else ImeAction.Done
-                    ),
-                    keyboardActions = KeyboardActions(
-                        onNext = {
-                            when (strategy) {
-                                TradingStrategy.MACD_RSI -> fMacdFast.requestFocus()
-                                TradingStrategy.BOLLINGER -> fBbP.requestFocus()
-                                else -> {}
+            when (strategy) {
+                TradingStrategy.MACD_RSI -> {
+                    OutlinedTextField(
+                        value = rsiPeriod,
+                        onValueChange = { rsiPeriod = filterInt(it) },
+                        label = { Text(stringResource(R.string.trading_config_label_rsi)) },
+                        isError = errorMap[TradingConfigField.RSI_PERIOD] != null,
+                        supportingText = {
+                            Column {
+                                val i = errorMap[TradingConfigField.RSI_PERIOD]
+                                if (i != null) {
+                                    Text(
+                                        text = tradingConfigIssueString(i, TradingConfigField.RSI_PERIOD),
+                                        color = err
+                                    )
+                                } else {
+                                    Text(
+                                        stringResource(
+                                            R.string.trading_config_range_rsi,
+                                            TradingConfigValidator.RSI_MIN,
+                                            TradingConfigValidator.RSI_MAX
+                                        ),
+                                        color = muted,
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                }
                             }
                         },
-                        onDone = { if (isFormValid) applyConfig() }
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusRequester(fRsi),
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Number,
+                            imeAction = ImeAction.Next
+                        ),
+                        keyboardActions = KeyboardActions(onNext = { fMacdFast.requestFocus() })
                     )
-                )
-                AnimatedVisibility(visible = strategy == TradingStrategy.MACD_RSI, enter = fadeIn(), exit = fadeOut()) {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             OutlinedTextField(
@@ -761,14 +734,13 @@ fun TradingConfigSheet(
                                 .focusRequester(fMacdSig),
                             keyboardOptions = KeyboardOptions(
                                 keyboardType = KeyboardType.Number,
-                                imeAction = ImeAction.Next
+                                imeAction = ImeAction.Done
                             ),
-                            keyboardActions = KeyboardActions(onNext = { fBbP.requestFocus() })
+                            keyboardActions = KeyboardActions(onDone = { if (isFormValid) applyConfig() })
                         )
                     }
                 }
-                val showBb = strategy == TradingStrategy.MACD_RSI || strategy == TradingStrategy.BOLLINGER
-                AnimatedVisibility(visible = showBb, enter = fadeIn(), exit = fadeOut()) {
+                TradingStrategy.BOLLINGER -> {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(
                             text = stringResource(R.string.trading_config_bollinger_section),
@@ -845,15 +817,16 @@ fun TradingConfigSheet(
                         }
                     }
                 }
+                TradingStrategy.PRICE_ACTION -> Unit
             }
-            Spacer(Modifier.height(8.dp))
-            Button(
-                onClick = { applyConfig() },
-                enabled = isFormValid,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(stringResource(R.string.trading_config_apply))
-            }
+        }
+        Spacer(Modifier.height(8.dp))
+        Button(
+            onClick = { applyConfig() },
+            enabled = isFormValid,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(stringResource(R.string.trading_config_apply))
         }
     }
 }
