@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.at.coba.data.repository.AssetsRepository
 import com.at.coba.data.repository.TradeHistoryRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -27,8 +28,18 @@ class HistoryViewModel(
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
 
+    /** Nilai **ric** dari `/bo-assets/v6/assets` untuk filter Pair (diselaraskan dengan `asset_ric` deals). */
+    private val _assetPairRics = MutableStateFlow<List<String>>(emptyList())
+    val assetPairRics: StateFlow<List<String>> = _assetPairRics.asStateFlow()
+
     /** Filter akun terakhir (All / Real / Demo) untuk pull-to-refresh. */
     private var lastAccountFilter: String = "All"
+
+    init {
+        viewModelScope.launch {
+            loadAssetPairs()
+        }
+    }
 
     fun load(accountFilter: String) {
         viewModelScope.launch {
@@ -46,11 +57,20 @@ class HistoryViewModel(
             _isPullRefreshing.value = true
             _error.value = null
             try {
+                loadAssetPairs()
                 executeFetch()
             } finally {
                 _isPullRefreshing.value = false
             }
         }
+    }
+
+    private suspend fun loadAssetPairs() {
+        val ctx = getApplication<Application>()
+        AssetsRepository.fetchChoices(ctx).fold(
+            onSuccess = { list -> _assetPairRics.value = list.map { it.ric } },
+            onFailure = { /* Dropdown tetap "All"; daftar dapat diisi lagi saat tarik refresh */ }
+        )
     }
 
     private suspend fun executeFetch() {

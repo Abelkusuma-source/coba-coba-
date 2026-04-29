@@ -1,11 +1,17 @@
 package com.at.coba.ui.screens
 
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -16,10 +22,12 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.at.coba.data.repository.AssetsRepository
 import com.at.coba.R
 import java.text.SimpleDateFormat
 import java.util.*
@@ -52,12 +60,19 @@ fun HistoryScreen(viewModel: HistoryViewModel) {
     val isPullRefreshing by viewModel.isPullRefreshing.collectAsStateWithLifecycle()
     val loadError by viewModel.error.collectAsStateWithLifecycle()
 
+    val listState = rememberLazyListState()
+
     LaunchedEffect(accountFilter) {
         viewModel.load(accountFilter)
     }
 
-    val pairOptions = remember(historyItems) {
-        listOf("All") + historyItems.map { it.pair }.distinct().sorted()
+    val assetPairRics by viewModel.assetPairRics.collectAsStateWithLifecycle()
+    val pairOptions = remember(assetPairRics, historyItems) {
+        val merged = AssetsRepository.mergeSortedRicLists(
+            assetPairRics,
+            historyItems.map { it.pair }
+        )
+        listOf("All") + merged
     }
 
     val filteredItems = remember(statusFilter, pairFilter, accountFilter, historyItems) {
@@ -67,6 +82,15 @@ fun HistoryScreen(viewModel: HistoryViewModel) {
             val accountOk = accountFilter == "All" || it.accountMode == accountFilter
             statusOk && pairOk && accountOk
         }
+    }
+
+    /** Setelah tarik-segarkan selesai, scroll ke atas agar tidak tertinggal di scroll lama. */
+    var previousPullRefreshing by remember { mutableStateOf(false) }
+    LaunchedEffect(isPullRefreshing) {
+        if (previousPullRefreshing && !isPullRefreshing) {
+            listState.animateScrollToItem(0)
+        }
+        previousPullRefreshing = isPullRefreshing
     }
 
     val snackbarHostState = remember { SnackbarHostState() }
@@ -83,7 +107,14 @@ fun HistoryScreen(viewModel: HistoryViewModel) {
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             FilterDropdown(stringResource(R.string.status), listOf("All", "Won", "Lost", "Tie"), statusFilter, Modifier.weight(1f)) { statusFilter = it }
-            FilterDropdown(stringResource(R.string.pair), pairOptions, pairFilter, Modifier.weight(1f)) {
+            PairFilterDropdownWithSearch(
+                label = stringResource(R.string.pair),
+                options = pairOptions,
+                selectedOption = pairFilter,
+                searchPlaceholder = stringResource(R.string.history_search_pair_placeholder),
+                noResultsLabel = stringResource(R.string.history_search_pair_no_results),
+                modifier = Modifier.weight(1f)
+            ) {
                 pairFilter = it
             }
         }
@@ -114,6 +145,7 @@ fun HistoryScreen(viewModel: HistoryViewModel) {
                 .fillMaxWidth()
         ) {
             LazyColumn(
+                state = listState,
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 modifier = Modifier.fillMaxSize()
             ) {
@@ -332,6 +364,111 @@ fun formatCurrency(amount: Double, currency: String): String {
         formatter.format(amount).replace("Rp", "Rp ")
     } else {
         String.format(Locale.US, "$%.2f", amount)
+    }
+}
+
+/** Exposed dropdown Pair dengan field pencarian di dalam menu untuk daftar panjang. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun PairFilterDropdownWithSearch(
+    label: String,
+    options: List<String>,
+    selectedOption: String,
+    searchPlaceholder: String,
+    noResultsLabel: String,
+    modifier: Modifier = Modifier,
+    onOptionSelected: (String) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    var searchQuery by remember { mutableStateOf("") }
+
+    LaunchedEffect(expanded) {
+        if (!expanded) searchQuery = ""
+    }
+
+    val filteredOptions = remember(searchQuery, options) {
+        val q = searchQuery.trim()
+        if (q.isEmpty()) options
+        else options.filter { it.contains(q, ignoreCase = true) }
+    }
+
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = !expanded },
+        modifier = modifier
+    ) {
+        OutlinedTextField(
+            value = selectedOption,
+            onValueChange = {},
+            readOnly = true,
+            label = { Text(label) },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+            modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable, true).fillMaxWidth(),
+            textStyle = MaterialTheme.typography.bodyMedium,
+            singleLine = true
+        )
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                placeholder = { Text(searchPlaceholder, style = MaterialTheme.typography.bodyMedium) },
+                leadingIcon = {
+                    Icon(
+                        Icons.Filled.Search,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                },
+                trailingIcon = {
+                    if (searchQuery.isNotEmpty()) {
+                        IconButton(onClick = { searchQuery = "" }) {
+                            Icon(
+                                Icons.Filled.Clear,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                },
+                singleLine = true,
+                textStyle = MaterialTheme.typography.bodyMedium,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                keyboardActions = KeyboardActions(onSearch = { /* filter only; tetap dalam menu */ })
+            )
+
+            HorizontalDivider(modifier = Modifier.padding(horizontal = 8.dp))
+
+            if (filteredOptions.isEmpty()) {
+                DropdownMenuItem(
+                    text = { Text(noResultsLabel, color = MaterialTheme.colorScheme.onSurfaceVariant) },
+                    onClick = { },
+                    enabled = false
+                )
+            } else {
+                filteredOptions.forEach { option ->
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                option,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        },
+                        onClick = {
+                            onOptionSelected(option)
+                            expanded = false
+                        }
+                    )
+                }
+            }
+        }
     }
 }
 

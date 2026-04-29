@@ -1,6 +1,7 @@
 package com.at.coba.data.network
 
 import okhttp3.MultipartBody
+import com.at.coba.data.network.dto.AssetsApiResponse
 import okhttp3.ResponseBody
 import retrofit2.http.Body
 import retrofit2.http.GET
@@ -37,4 +38,9 @@ interface ApiService {
         @Query("type") type: String,
         @Query("locale") locale: String = "id"
     ): ResponseBody
+
+    @GET("/bo-assets/v6/assets")
+    suspend fun getAssets(
+        @Query("locale") locale: String = "id"
+    ): AssetsApiResponse
 }
