@@ -5,6 +5,7 @@ import android.net.Uri
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
@@ -65,6 +66,10 @@ class DataStoreManager(private val context: Context) {
         val USER_EMAIL_VERIFIED_KEY = booleanPreferencesKey("user_email_verified")
         val USER_PHONE_VERIFIED_KEY = booleanPreferencesKey("user_phone_verified")
         val USER_DOCS_VERIFIED_KEY = booleanPreferencesKey("user_docs_verified")
+        val USER_FIRST_NAME_KEY = stringPreferencesKey("user_first_name")
+        val USER_LAST_NAME_KEY = stringPreferencesKey("user_last_name")
+        val USER_GENDER_KEY = stringPreferencesKey("user_gender_raw")
+        val USER_BIRTHDAY_ISO_KEY = stringPreferencesKey("user_birthday_iso")
 
         /** Internal file name after copying picker content into app storage. */
         const val PROFILE_IMAGE_INTERNAL_FILE = "profile_image.jpg"
@@ -198,6 +203,13 @@ class DataStoreManager(private val context: Context) {
     val isPhoneVerified: Flow<Boolean> = dataStore.data.map { it[USER_PHONE_VERIFIED_KEY] ?: false }
     val isDocsVerified: Flow<Boolean> = dataStore.data.map { it[USER_DOCS_VERIFIED_KEY] ?: false }
 
+    val userFirstName: Flow<String?> = dataStore.data.map { it[USER_FIRST_NAME_KEY] }
+    val userLastName: Flow<String?> = dataStore.data.map { it[USER_LAST_NAME_KEY] }
+    /** Raw API gender value (e.g. `male`); formatting for UI stays in presentation layer. */
+    val userGenderRaw: Flow<String?> = dataStore.data.map { it[USER_GENDER_KEY] }
+    /** `yyyy-MM-dd` when set server-side */
+    val userBirthdayIso: Flow<String?> = dataStore.data.map { it[USER_BIRTHDAY_ISO_KEY] }
+
     suspend fun getStoredUserId(): String? = dataStore.data.map { it[USER_ID_KEY] }.first()
 
     suspend fun setUserId(userId: String) {
@@ -221,6 +233,32 @@ class DataStoreManager(private val context: Context) {
             if (emailVerified != null) preferences[USER_EMAIL_VERIFIED_KEY] = emailVerified
             if (phoneVerified != null) preferences[USER_PHONE_VERIFIED_KEY] = phoneVerified
             if (docsVerified != null) preferences[USER_DOCS_VERIFIED_KEY] = docsVerified
+        }
+    }
+
+    /**
+     * Persists identity fields synced from GET profile; blank or null clears the preference key.
+     */
+    suspend fun syncUserPersonalFieldsFromServer(
+        firstName: String?,
+        lastName: String?,
+        genderRaw: String?,
+        birthdayIso: String?,
+    ) {
+        dataStore.edit { preferences ->
+            preferences.putNormalizedString(USER_FIRST_NAME_KEY, firstName)
+            preferences.putNormalizedString(USER_LAST_NAME_KEY, lastName)
+            preferences.putNormalizedString(USER_GENDER_KEY, genderRaw)
+            preferences.putNormalizedString(USER_BIRTHDAY_ISO_KEY, birthdayIso)
+        }
+    }
+
+    private fun MutablePreferences.putNormalizedString(key: Preferences.Key<String>, value: String?) {
+        val trimmed = value?.trim().orEmpty()
+        if (trimmed.isEmpty()) {
+            remove(key)
+        } else {
+            this[key] = trimmed
         }
     }
 
@@ -338,6 +376,13 @@ class DataStoreManager(private val context: Context) {
             preferences.remove(USER_EMAIL_KEY)
             preferences.remove(USER_NICKNAME_KEY)
             preferences.remove(USER_PHONE_KEY)
+            preferences.remove(USER_EMAIL_VERIFIED_KEY)
+            preferences.remove(USER_PHONE_VERIFIED_KEY)
+            preferences.remove(USER_DOCS_VERIFIED_KEY)
+            preferences.remove(USER_FIRST_NAME_KEY)
+            preferences.remove(USER_LAST_NAME_KEY)
+            preferences.remove(USER_GENDER_KEY)
+            preferences.remove(USER_BIRTHDAY_ISO_KEY)
         }
     }
 

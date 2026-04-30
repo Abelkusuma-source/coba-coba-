@@ -94,6 +94,18 @@ class ProfileViewModel(
     val isDocsVerified: StateFlow<Boolean> =
         dataStoreManager.isDocsVerified.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
+    val userFirstName: StateFlow<String?> =
+        dataStoreManager.userFirstName.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    val userLastName: StateFlow<String?> =
+        dataStoreManager.userLastName.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    val userGenderRaw: StateFlow<String?> =
+        dataStoreManager.userGenderRaw.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    val userBirthdayIso: StateFlow<String?> =
+        dataStoreManager.userBirthdayIso.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
     init {
         viewModelScope.launch {
             val email = dataStoreManager.userEmail.first()

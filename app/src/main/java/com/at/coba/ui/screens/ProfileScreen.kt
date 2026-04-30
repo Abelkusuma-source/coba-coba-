@@ -42,6 +42,10 @@ import coil.request.ImageRequest
 import com.at.coba.data.ThemeMode
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.collectLatest
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import java.time.format.DateTimeParseException
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -52,6 +56,11 @@ fun ProfileScreen(
     userEmail: String?,
     userPhone: String?,
     userNickname: String?,
+    userFirstName: String?,
+    userLastName: String?,
+    /** Raw API gender; formatted for display in [profileGenderLabel]. */
+    userGenderRaw: String?,
+    userBirthdayIso: String?,
     isEmailVerified: Boolean,
     isPhoneVerified: Boolean,
     isDocsVerified: Boolean,
@@ -186,7 +195,7 @@ fun ProfileScreen(
                             shape = RoundedCornerShape(8.dp),
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(bottom = 24.dp)
+                                .padding(bottom = 16.dp)
                         ) {
                             Row(
                                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
@@ -223,11 +232,6 @@ fun ProfileScreen(
                                 )
                                 Spacer(Modifier.height(16.dp))
                                 ProfileReadOnlyRow(
-                                    label = "Nama panggilan",
-                                    value = userNickname?.takeIf { it.isNotBlank() } ?: "—"
-                                )
-                                Spacer(Modifier.height(12.dp))
-                                ProfileReadOnlyRow(
                                     label = "Telepon",
                                     value = userPhone?.takeIf { it.isNotBlank() } ?: "—",
                                     verified = isPhoneVerified
@@ -237,6 +241,49 @@ fun ProfileScreen(
                                     label = "Email",
                                     value = userEmail?.takeIf { it.isNotBlank() } ?: "—",
                                     verified = isEmailVerified
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+                            )
+                        ) {
+                            Column(Modifier.padding(16.dp)) {
+                                Text(
+                                    "Data pribadi",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Spacer(Modifier.height(16.dp))
+                                ProfileReadOnlyRow(
+                                    label = "Nama panggilan",
+                                    value = profileFieldOrDash(userNickname)
+                                )
+                                Spacer(Modifier.height(12.dp))
+                                ProfileReadOnlyRow(
+                                    label = "Nama depan",
+                                    value = profileFieldOrDash(userFirstName)
+                                )
+                                Spacer(Modifier.height(12.dp))
+                                ProfileReadOnlyRow(
+                                    label = "Nama belakang",
+                                    value = profileFieldOrDash(userLastName)
+                                )
+                                Spacer(Modifier.height(12.dp))
+                                ProfileReadOnlyRow(
+                                    label = "Jenis kelamin",
+                                    value = profileGenderLabel(userGenderRaw)
+                                )
+                                Spacer(Modifier.height(12.dp))
+                                ProfileReadOnlyRow(
+                                    label = "Tanggal lahir",
+                                    value = profileBirthdayLabel(userBirthdayIso)
                                 )
                             }
                         }
@@ -304,6 +351,31 @@ fun ProfileScreen(
                 }
             }
         }
+    }
+}
+
+private val profileDisplayLocale: Locale = Locale("id", "ID")
+
+private fun profileFieldOrDash(value: String?): String =
+    value?.takeIf { it.isNotBlank() } ?: "—"
+
+private fun profileGenderLabel(api: String?): String {
+    val key = api?.trim()?.lowercase(Locale.ROOT).orEmpty()
+    return when (key) {
+        "male", "m" -> "Laki-laki"
+        "female", "f" -> "Perempuan"
+        else -> api?.trim()?.takeIf { it.isNotEmpty() } ?: "—"
+    }
+}
+
+private fun profileBirthdayLabel(iso: String?): String {
+    val s = iso?.trim().orEmpty()
+    if (s.isEmpty()) return "—"
+    return try {
+        val d = LocalDate.parse(s, DateTimeFormatter.ISO_LOCAL_DATE)
+        DateTimeFormatter.ofPattern("d MMMM yyyy", profileDisplayLocale).format(d)
+    } catch (_: DateTimeParseException) {
+        s
     }
 }
 
@@ -396,7 +468,31 @@ fun ProfileSkeleton(modifier: Modifier = Modifier) {
                 .background(Color.Gray.copy(alpha = 0.1f))
         )
 
-        repeat(3) {
+        repeat(2) {
+            Column(modifier = Modifier.fillMaxWidth().padding(bottom = 20.dp)) {
+                Box(
+                    modifier = Modifier.width(100.dp).height(16.dp).background(Color.Gray.copy(alpha = 0.1f))
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Box(
+                    modifier = Modifier.fillMaxWidth().height(44.dp).clip(RoundedCornerShape(12.dp))
+                        .background(Color.Gray.copy(alpha = 0.05f))
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Box(
+            modifier = Modifier
+                .padding(bottom = 24.dp)
+                .fillMaxWidth()
+                .height(32.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(Color.Gray.copy(alpha = 0.1f))
+        )
+
+        repeat(5) {
             Column(modifier = Modifier.fillMaxWidth().padding(bottom = 20.dp)) {
                 Box(
                     modifier = Modifier.width(100.dp).height(16.dp).background(Color.Gray.copy(alpha = 0.1f))

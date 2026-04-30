@@ -70,6 +70,13 @@ object UserProfileRepository {
                 docsVerified = profile.data.docsVerified
             )
 
+            dm.syncUserPersonalFieldsFromServer(
+                firstName = profile.data.firstName,
+                lastName = profile.data.lastName,
+                genderRaw = profile.data.gender,
+                birthdayIso = profile.data.birthday
+            )
+
             val avatarRaw = profile.data.avatar?.trim().orEmpty()
             if (avatarRaw.isEmpty()) {
                 dm.clearProfileImageStorage()

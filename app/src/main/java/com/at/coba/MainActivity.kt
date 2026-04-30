@@ -236,6 +236,10 @@ fun MainScreen(dataStoreManager: DataStoreManager) {
                 val userEmail by profileViewModel.userEmail.collectAsStateWithLifecycle()
                 val userPhone by profileViewModel.userPhone.collectAsStateWithLifecycle()
                 val userNickname by profileViewModel.userNickname.collectAsStateWithLifecycle()
+                val userFirstName by profileViewModel.userFirstName.collectAsStateWithLifecycle()
+                val userLastName by profileViewModel.userLastName.collectAsStateWithLifecycle()
+                val userGenderRaw by profileViewModel.userGenderRaw.collectAsStateWithLifecycle()
+                val userBirthdayIso by profileViewModel.userBirthdayIso.collectAsStateWithLifecycle()
                 val isEmailVerified by profileViewModel.isEmailVerified.collectAsStateWithLifecycle()
                 val isPhoneVerified by profileViewModel.isPhoneVerified.collectAsStateWithLifecycle()
                 val isDocsVerified by profileViewModel.isDocsVerified.collectAsStateWithLifecycle()
@@ -256,6 +260,10 @@ fun MainScreen(dataStoreManager: DataStoreManager) {
                     userEmail = userEmail,
                     userPhone = userPhone,
                     userNickname = userNickname,
+                    userFirstName = userFirstName,
+                    userLastName = userLastName,
+                    userGenderRaw = userGenderRaw,
+                    userBirthdayIso = userBirthdayIso,
                     isEmailVerified = isEmailVerified,
                     isPhoneVerified = isPhoneVerified,
                     isDocsVerified = isDocsVerified,

@@ -18,7 +18,9 @@ data class ProfileData(
     @SerializedName("email_verified") val emailVerified: Boolean = false,
     @SerializedName("phone_verified") val phoneVerified: Boolean = false,
     @SerializedName("docs_verified") val docsVerified: Boolean = false,
-    val avatar: String? = null
+    val avatar: String? = null,
+    /** Server may send `yyyy-MM-dd` or empty string when unset. */
+    val birthday: String? = null
 )
 
 data class UpdateProfileRequest(
