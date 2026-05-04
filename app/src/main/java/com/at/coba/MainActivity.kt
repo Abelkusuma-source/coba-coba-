@@ -23,6 +23,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.AbstractSavedStateViewModelFactory
+import androidx.lifecycle.SavedStateHandle
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -88,7 +91,22 @@ class MainActivity : ComponentActivity() {
                         !isDataLoaded -> SplashScreen()
                         authToken == null -> {
                             val loginViewModel: LoginViewModel = viewModel(
-                                factory = LoginViewModel.Factory(dataStoreManager)
+                                factory = object : AbstractSavedStateViewModelFactory(
+                                    this@MainActivity,
+                                    null,
+                                ) {
+                                    override fun <T : ViewModel> create(
+                                        key: String,
+                                        modelClass: Class<T>,
+                                        handle: SavedStateHandle,
+                                    ): T {
+                                        if (modelClass.isAssignableFrom(LoginViewModel::class.java)) {
+                                            @Suppress("UNCHECKED_CAST")
+                                            return LoginViewModel(handle, dataStoreManager) as T
+                                        }
+                                        throw IllegalArgumentException("Unknown ViewModel class")
+                                    }
+                                },
                             )
                             LoginScreen(
                                 viewModel = loginViewModel,
@@ -135,7 +153,8 @@ fun MainScreen(dataStoreManager: DataStoreManager) {
     }
 
     val isTopLevelDestination = bottomNavItems.any { it.route == currentDestination?.route }
-    val isDebugScreen = currentDestination?.route == Screen.Debug.route
+    val isDebugScreen = currentDestination?.route == Screen.Debug.route ||
+        currentDestination?.route == Screen.DebugDb.route
 
     Scaffold(
         topBar = {
@@ -147,6 +166,7 @@ fun MainScreen(dataStoreManager: DataStoreManager) {
                         Screen.Web.route -> Screen.Web.title
                         Screen.Profile.route -> Screen.Profile.title
                         Screen.Debug.route -> Screen.Debug.title
+                        Screen.DebugDb.route -> Screen.DebugDb.title
                         else -> "App"
                     }
                     Text(text = "$title $buildVersion")
@@ -277,7 +297,15 @@ fun MainScreen(dataStoreManager: DataStoreManager) {
                     onPullRefresh = profileViewModel::refreshProfileFromPull
                 )
             }
-            composable(Screen.Debug.route) { DebugScreen(dataStoreManager) }
+            composable(Screen.Debug.route) {
+                DebugScreen(
+                    dataStoreManager = dataStoreManager,
+                    navController = navController,
+                )
+            }
+            composable(Screen.DebugDb.route) {
+                DebugDatabaseScreen()
+            }
         }
     }
 }

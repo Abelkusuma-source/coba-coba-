@@ -24,7 +24,9 @@ This is a Jetpack Compose Android app with a single-activity architecture using 
 
 ### Authentication Flow
 - Login via `/passport/v2/sign_in` endpoint with device ID
-- Stores auth token, cookies, 2FA token in DataStore
+- If the server returns `2fa_required`, the app calls `/passport/v1/2fa/validate/otp?locale=id`, then signs in again with the temporary `2fa_token` in the login body
+- The interim OTP token from validate-otp exists only in memory for that request chain; it is **not** persisted in DataStore (only the final auth token and cookies are stored after successful login)
+- While waiting for OTP, email/password are held in `SavedStateHandle` so process death does not force a full re-login unless the user clears app data
 - Clears auth data on logout via `DataStoreManager.clearAuthData()`
 
 ### Theme Management
@@ -34,7 +36,7 @@ This is a Jetpack Compose Android app with a single-activity architecture using 
 
 ### Navigation Patterns
 - Bottom nav items: Trade, History, Web, Profile
-- Debug screen accessible from any screen via top bar bug icon
+- Debug screen accessible from any screen via top bar bug icon (tabs: DataStore vs Room DB); optional route `debug_db` for full-screen Room inspector
 - Back navigation uses `navController.navigateUp()`
 - Screen transitions use slide + fade animations
 
@@ -46,7 +48,8 @@ This is a Jetpack Compose Android app with a single-activity architecture using 
 - Plugins: `libs.plugins.android.application`, `libs.plugins.kotlin.compose`
 
 ### Data Persistence
-- All app data via DataStore Preferences
+- App preferences and session: DataStore Preferences
+- Cached trade deals and asset list: Room (`CobaDatabase`)
 - Keys defined as constants in `DataStoreManager.Companion`
 - Flows for reactive UI updates, suspend functions for writes
 - Device ID auto-generated if missing
@@ -60,7 +63,7 @@ This is a Jetpack Compose Android app with a single-activity architecture using 
 
 ### UI Patterns
 - Screens in `ui/screens/` with corresponding ViewModels
-- ViewModels created with factory pattern: `viewModel(factory = XxxViewModel.Factory(dataStoreManager))`
+- ViewModels created with factory pattern: `viewModel(factory = XxxViewModel.Factory(dataStoreManager))` or `AbstractSavedStateViewModelFactory` where `SavedStateHandle` is needed (e.g. `LoginViewModel`)
 - State collected with `collectAsStateWithLifecycle()`
 - Icons from Material Icons, content descriptions provided
 
@@ -78,8 +81,7 @@ This is a Jetpack Compose Android app with a single-activity architecture using 
 
 ## Debugging
 - Debug screen accessible via top bar icon on any screen
-- All DataStore values exposed via `DataStoreManager.allData` flow
+- DataStore values exposed via `DataStoreManager.allData` flow
+- Room tables `trade_deals` and `asset_choices` visible in Debug → Room DB tab or `Screen.DebugDb` route
 - Build version displayed in top bar (fetched from packageManager)
-- OkHttp logging for network requests</content>
-<parameter name="filePath">C:\Users\Jalu\AndroidStudioProjects\Coba\AGENTS.md
-
+- OkHttp logging for network requests

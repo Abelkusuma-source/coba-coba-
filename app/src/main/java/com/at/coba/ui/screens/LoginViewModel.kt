@@ -1,8 +1,8 @@
 package com.at.coba.ui.screens
 
 import android.content.Context
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.at.coba.data.DataStoreManager
 import com.at.coba.data.network.ApiClient
@@ -26,13 +26,44 @@ sealed class LoginUiState {
     data class Error(val message: String) : LoginUiState()
 }
 
-class LoginViewModel(private val dataStoreManager: DataStoreManager) : ViewModel() {
+class LoginViewModel(
+    private val savedStateHandle: SavedStateHandle,
+    private val dataStoreManager: DataStoreManager,
+) : ViewModel() {
 
     private val _uiState = MutableStateFlow<LoginUiState>(LoginUiState.Idle)
     val uiState: StateFlow<LoginUiState> = _uiState.asStateFlow()
 
-    private var savedEmail = ""
-    private var savedPassword = ""
+    init {
+        if (!pendingEmail.isNullOrBlank()) {
+            _uiState.value = LoginUiState.Is2FARequired
+        }
+    }
+
+    private var pendingEmail: String?
+        get() = savedStateHandle[KEY_PENDING_EMAIL]
+        set(value) {
+            if (value.isNullOrBlank()) {
+                savedStateHandle.remove<String>(KEY_PENDING_EMAIL)
+            } else {
+                savedStateHandle[KEY_PENDING_EMAIL] = value
+            }
+        }
+
+    private var pendingPassword: String?
+        get() = savedStateHandle[KEY_PENDING_PASSWORD]
+        set(value) {
+            if (value.isNullOrBlank()) {
+                savedStateHandle.remove<String>(KEY_PENDING_PASSWORD)
+            } else {
+                savedStateHandle[KEY_PENDING_PASSWORD] = value
+            }
+        }
+
+    private fun clearPendingCredentials() {
+        pendingEmail = null
+        pendingPassword = null
+    }
 
     fun login(context: Context, email: String, password: String) {
         viewModelScope.launch {
@@ -45,7 +76,9 @@ class LoginViewModel(private val dataStoreManager: DataStoreManager) : ViewModel
 
                 val apiService = ApiClient.getApiService(context)
                 val response = apiService.login(LoginRequest(email, password))
-                
+
+                clearPendingCredentials()
+
                 // Simpan data ke DataStore + Update Cache Instan untuk Interceptor
                 val token = response.data.authtoken
                 CookieManager.setAuthToken(token)
@@ -60,24 +93,24 @@ class LoginViewModel(private val dataStoreManager: DataStoreManager) : ViewModel
                 _uiState.value = LoginUiState.Success(hasAgreed)
             } catch (e: HttpException) {
                 val errorBody = e.response()?.errorBody()?.string()
-                
+
                 if (e.code() == 422 && errorBody != null) {
                     try {
                         val json = JSONObject(errorBody)
                         val errors = json.optJSONArray("errors")
                         val code = errors?.getJSONObject(0)?.optString("code")
-                        
+
                         if (code == "2fa_required") {
-                            savedEmail = email
-                            savedPassword = password
+                            pendingEmail = email
+                            pendingPassword = password
                             _uiState.value = LoginUiState.Is2FARequired
                             return@launch
                         }
-                    } catch (ex: Exception) {
+                    } catch (_: Exception) {
                         // JSON parsing failed, proceed to normal error handling
                     }
                 }
-                
+
                 val message = if (e.code() == 422) {
                     "Invalid email or password."
                 } else {
@@ -90,28 +123,46 @@ class LoginViewModel(private val dataStoreManager: DataStoreManager) : ViewModel
         }
     }
 
-    // SESUDAH ✅ — 3 step flow
     fun verifyOtp(context: Context, otpCode: String) {
         viewModelScope.launch {
+            val email = pendingEmail
+            val password = pendingPassword
+            if (email.isNullOrBlank() || password.isNullOrBlank()) {
+                _uiState.value = LoginUiState.Error(
+                    "Sesi 2FA tidak valid. Silakan masukkan email dan password lagi.",
+                )
+                return@launch
+            }
+
             _uiState.value = LoginUiState.Loading
             try {
                 val apiService = ApiClient.getApiService(context)
 
-                // STEP 1: Validate OTP → server return 2FA token via response
                 val otpResponse = apiService.validateOtp(OtpRequest(otp = otpCode))
-                val twoFaToken = otpResponse.data?.twoFaToken
-                    ?: throw Exception("Invalid OTP response")
 
-                // STEP 2: Sign in with 2FA token → server return authtoken
+                val twoFaToken = otpResponse.data?.twoFaToken?.takeIf { it.isNotBlank() }
+                if (twoFaToken == null) {
+                    if (!otpResponse.success) {
+                        val msg = otpResponse.errors.firstOrNull()?.let { err ->
+                            err.context?.message?.takeIf { it.isNotBlank() } ?: err.code
+                        } ?: "Validasi OTP gagal"
+                        _uiState.value = LoginUiState.Error(msg)
+                    } else {
+                        _uiState.value = LoginUiState.Error("Respon OTP tidak berisi token 2FA")
+                    }
+                    return@launch
+                }
+
                 val loginResponse = apiService.login(
                     LoginRequest(
-                        email = savedEmail,
-                        password = savedPassword,
-                        two_fa_token = twoFaToken
-                    )
+                        email = email,
+                        password = password,
+                        two_fa_token = twoFaToken,
+                    ),
                 )
 
-                // STEP 3: Save authtoken & navigate + Update Cache Instan
+                clearPendingCredentials()
+
                 val token = loginResponse.data.authtoken
                 CookieManager.setAuthToken(token)
                 dataStoreManager.setAuthToken(token)
@@ -121,26 +172,20 @@ class LoginViewModel(private val dataStoreManager: DataStoreManager) : ViewModel
 
                 val hasAgreed = dataStoreManager.hasUserAgreed.first()
                 _uiState.value = LoginUiState.Success(hasAgreed)
-
             } catch (e: HttpException) {
                 _uiState.value = LoginUiState.Error(
-                    "Invalid code. Please check the app and try again"
+                    "Invalid code. Please check the app and try again",
                 )
             } catch (e: Exception) {
                 _uiState.value = LoginUiState.Error(
-                    e.message ?: "Invalid code. Please check the app and try again"
+                    e.message ?: "Invalid code. Please check the app and try again",
                 )
             }
         }
     }
 
-    class Factory(private val dataStoreManager: DataStoreManager) : ViewModelProvider.Factory {
-        override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            if (modelClass.isAssignableFrom(LoginViewModel::class.java)) {
-                @Suppress("UNCHECKED_CAST")
-                return LoginViewModel(dataStoreManager) as T
-            }
-            throw IllegalArgumentException("Unknown ViewModel class")
-        }
+    companion object {
+        const val KEY_PENDING_EMAIL = "login_pending_email"
+        const val KEY_PENDING_PASSWORD = "login_pending_password"
     }
 }
