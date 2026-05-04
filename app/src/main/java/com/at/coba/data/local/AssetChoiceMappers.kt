@@ -6,3 +6,8 @@ fun AssetChoice.toEntity(): AssetChoiceEntity = AssetChoiceEntity(
     ric = ric,
     label = label,
 )
+
+fun AssetChoiceEntity.toAssetChoice(): AssetChoice = AssetChoice(
+    ric = ric,
+    label = label,
+)

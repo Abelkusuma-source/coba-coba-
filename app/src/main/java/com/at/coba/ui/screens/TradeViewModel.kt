@@ -5,6 +5,9 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import com.at.coba.data.DataStoreManager
+import com.at.coba.data.local.DatabaseProvider
+import com.at.coba.data.local.toAssetChoice
+import com.at.coba.data.local.toEntity
 import com.at.coba.data.TradingConfig
 import com.at.coba.data.TradingStrategy
 import com.at.coba.data.network.CookieManager
@@ -23,6 +26,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -50,8 +54,11 @@ class TradeViewModel(
     private val dataStoreManager: DataStoreManager
 ) : ViewModel() {
 
-    private val _assetChoices = MutableStateFlow<List<AssetChoice>>(emptyList())
-    val assetChoices: StateFlow<List<AssetChoice>> = _assetChoices.asStateFlow()
+    private val db = DatabaseProvider.get(application)
+
+    val assetChoices: StateFlow<List<AssetChoice>> = db.assetChoiceDao().observeChoicesOrdered()
+        .map { entities -> entities.map { it.toAssetChoice() } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     private val _selectedAsset = MutableStateFlow<AssetChoice?>(null)
     val selectedAsset: StateFlow<AssetChoice?> = _selectedAsset.asStateFlow()
@@ -99,6 +106,9 @@ class TradeViewModel(
 
     init {
         viewModelScope.launch {
+            assetChoices.collect { syncSelectionWithChoices(it) }
+        }
+        viewModelScope.launch {
             loadAssetChoices()
         }
         // Observasi tickData untuk mengupdate candleHistory secara real-time
@@ -119,22 +129,48 @@ class TradeViewModel(
         }
     }
 
+    private fun syncSelectionWithChoices(list: List<AssetChoice>) {
+        if (list.isEmpty()) return
+        val current = _selectedAsset.value
+        when {
+            current == null -> {
+                val first = list.first()
+                _selectedAsset.value = first
+                assetSocketManager.setActiveRic(first.ric)
+                webSocketManager.setAssetChannelRic(first.ric)
+            }
+            list.none { it.ric == current.ric } -> {
+                val first = list.first()
+                _selectedAsset.value = first
+                assetSocketManager.setActiveRic(first.ric)
+                webSocketManager.setAssetChannelRic(first.ric)
+                candleManager.clear()
+                _tradeSignal.value = TradeSignal.SCANNING
+                _indicatorState.value = IndicatorState()
+            }
+            else -> {
+                val updated = list.first { it.ric == current.ric }
+                if (updated != current) {
+                    _selectedAsset.value = updated
+                }
+            }
+        }
+    }
+
     suspend fun loadAssetChoices() {
         _isAssetsLoading.value = true
         _assetsLoadError.value = null
         AssetsRepository.fetchChoices(application).fold(
             onSuccess = { list ->
-                _assetChoices.value = list
-                if (_selectedAsset.value == null && list.isNotEmpty()) {
-                    val first = list.first()
-                    _selectedAsset.value = first
-                    assetSocketManager.setActiveRic(first.ric)
-                    webSocketManager.setAssetChannelRic(first.ric)
-                }
+                db.assetChoiceDao().replaceAll(list.map { it.toEntity() })
+                _assetsLoadError.value = null
             },
             onFailure = { e ->
-                _assetsLoadError.value = e.message ?: e.javaClass.simpleName
-            }
+                val cached = db.assetChoiceDao().count() > 0
+                if (!cached) {
+                    _assetsLoadError.value = e.message ?: e.javaClass.simpleName
+                }
+            },
         )
         _isAssetsLoading.value = false
     }

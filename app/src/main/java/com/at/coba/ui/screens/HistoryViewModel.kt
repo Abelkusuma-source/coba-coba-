@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.at.coba.data.DataStoreManager
 import com.at.coba.data.local.DatabaseProvider
 import com.at.coba.data.local.toEntity
 import com.at.coba.data.local.toHistoryItem
@@ -27,6 +28,7 @@ class HistoryViewModel(
 ) : AndroidViewModel(application) {
 
     private val db = DatabaseProvider.get(application)
+    private val dataStore = DataStoreManager(application)
 
     private val accountFilterFlow = MutableStateFlow("All")
 
@@ -44,6 +46,9 @@ class HistoryViewModel(
     /** Daftar **ric** untuk filter Pair: cache Room (`asset_choices`), sinkron dari `/bo-assets/v6/assets`. */
     val assetPairRics: StateFlow<List<String>> = db.assetChoiceDao().observeRicsOrdered()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    val historyLastSyncedAtEpochMs: StateFlow<Long?> = dataStore.historyLastSyncedAtEpochMs
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
@@ -108,6 +113,7 @@ class HistoryViewModel(
         result.fold(
             onSuccess = { list ->
                 persistFetched(lastAccountFilter, list)
+                dataStore.setHistoryLastSyncedAtEpochMs(System.currentTimeMillis())
             },
             onFailure = { e -> _error.value = e.message ?: e.javaClass.simpleName }
         )

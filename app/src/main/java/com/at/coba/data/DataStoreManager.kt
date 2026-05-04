@@ -70,6 +70,8 @@ class DataStoreManager(private val context: Context) {
         val USER_LAST_NAME_KEY = stringPreferencesKey("user_last_name")
         val USER_GENDER_KEY = stringPreferencesKey("user_gender_raw")
         val USER_BIRTHDAY_ISO_KEY = stringPreferencesKey("user_birthday_iso")
+        /** Epoch ms saat riwayat deal terakhir berhasil di-persist dari API ke Room. */
+        val HISTORY_LAST_SYNCED_AT_KEY = longPreferencesKey("history_last_synced_at")
 
         /** Internal file name after copying picker content into app storage. */
         const val PROFILE_IMAGE_INTERNAL_FILE = "profile_image.jpg"
@@ -209,6 +211,16 @@ class DataStoreManager(private val context: Context) {
     val userGenderRaw: Flow<String?> = dataStore.data.map { it[USER_GENDER_KEY] }
     /** `yyyy-MM-dd` when set server-side */
     val userBirthdayIso: Flow<String?> = dataStore.data.map { it[USER_BIRTHDAY_ISO_KEY] }
+
+    val historyLastSyncedAtEpochMs: Flow<Long?> = dataStore.data.map { preferences ->
+        preferences[HISTORY_LAST_SYNCED_AT_KEY]?.takeIf { it > 0L }
+    }
+
+    suspend fun setHistoryLastSyncedAtEpochMs(epochMs: Long) {
+        dataStore.edit { preferences ->
+            preferences[HISTORY_LAST_SYNCED_AT_KEY] = epochMs
+        }
+    }
 
     suspend fun getStoredUserId(): String? = dataStore.data.map { it[USER_ID_KEY] }.first()
 
@@ -383,6 +395,7 @@ class DataStoreManager(private val context: Context) {
             preferences.remove(USER_LAST_NAME_KEY)
             preferences.remove(USER_GENDER_KEY)
             preferences.remove(USER_BIRTHDAY_ISO_KEY)
+            preferences.remove(HISTORY_LAST_SYNCED_AT_KEY)
         }
     }
 

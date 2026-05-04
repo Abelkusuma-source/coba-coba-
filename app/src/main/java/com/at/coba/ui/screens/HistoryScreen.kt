@@ -67,6 +67,7 @@ fun HistoryScreen(viewModel: HistoryViewModel) {
     }
 
     val assetPairRics by viewModel.assetPairRics.collectAsStateWithLifecycle()
+    val historyLastSyncedMs by viewModel.historyLastSyncedAtEpochMs.collectAsStateWithLifecycle()
     val pairOptions = remember(assetPairRics, historyItems) {
         val merged = AssetsRepository.mergeSortedRicLists(
             assetPairRics,
@@ -121,6 +122,17 @@ fun HistoryScreen(viewModel: HistoryViewModel) {
 
         Spacer(modifier = Modifier.height(8.dp))
         FilterDropdown(stringResource(R.string.account_mode), listOf("All", "Real", "Demo"), accountFilter, Modifier.fillMaxWidth()) { accountFilter = it }
+
+        val historySyncedSdf = remember { SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.getDefault()) }
+        val syncedAt = historyLastSyncedMs
+        if (syncedAt != null) {
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = stringResource(R.string.history_last_synced, historySyncedSdf.format(Date(syncedAt))),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
 
         Spacer(modifier = Modifier.height(16.dp))
 

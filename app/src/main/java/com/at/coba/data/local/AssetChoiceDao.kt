@@ -14,6 +14,13 @@ interface AssetChoiceDao {
     @Query("SELECT ric FROM asset_choices ORDER BY label COLLATE NOCASE ASC")
     fun observeRicsOrdered(): Flow<List<String>>
 
+    /** Baris penuh untuk dropdown Trade / label tampilan (sama urutan dengan [observeRicsOrdered]). */
+    @Query("SELECT * FROM asset_choices ORDER BY label COLLATE NOCASE ASC")
+    fun observeChoicesOrdered(): Flow<List<AssetChoiceEntity>>
+
+    @Query("SELECT COUNT(*) FROM asset_choices")
+    suspend fun count(): Int
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(items: List<AssetChoiceEntity>)
 
