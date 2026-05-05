@@ -154,7 +154,8 @@ fun MainScreen(dataStoreManager: DataStoreManager) {
 
     val isTopLevelDestination = bottomNavItems.any { it.route == currentDestination?.route }
     val isDebugScreen = currentDestination?.route == Screen.Debug.route ||
-        currentDestination?.route == Screen.DebugDb.route
+        currentDestination?.route == Screen.DebugDb.route ||
+        currentDestination?.route == Screen.DebugBotDb.route
 
     Scaffold(
         topBar = {
@@ -305,6 +306,9 @@ fun MainScreen(dataStoreManager: DataStoreManager) {
             }
             composable(Screen.DebugDb.route) {
                 DebugDatabaseScreen()
+            }
+            composable(Screen.DebugBotDb.route) {
+                DebugBotDatabaseScreen()
             }
         }
     }

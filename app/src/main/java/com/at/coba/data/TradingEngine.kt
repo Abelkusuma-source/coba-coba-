@@ -2,8 +2,11 @@ package com.at.coba.data
 
 import android.app.Application
 import android.content.Context
+import com.at.coba.data.local.BotDatabaseProvider
+import com.at.coba.data.local.BotDealEntity
 import com.at.coba.data.model.Candle
 import com.at.coba.data.network.AssetSocketManager
+import com.at.coba.data.network.BoCreateDealResult
 import com.at.coba.data.network.WebSocketManager
 import com.at.coba.data.repository.AssetChoice
 import com.at.coba.util.CandleManager
@@ -42,6 +45,7 @@ data class IndicatorState(
  * Dipegang oleh [com.at.coba.service.TradingService] agar tetap hidup di background.
  */
 class TradingEngine private constructor(
+    private val application: Application,
     private val dataStoreManager: DataStoreManager,
 ) {
 
@@ -49,9 +53,12 @@ class TradingEngine private constructor(
     val assetSocketManager = AssetSocketManager(dataStoreManager)
     private val candleManager = CandleManager(100)
 
+    private val botDealDao = BotDatabaseProvider.get(application).botDealDao()
+
     private val engineJob = SupervisorJob()
     private val engineScope = CoroutineScope(engineJob + Dispatchers.Default)
     private var tickCollectorJob: Job? = null
+    private var boResultCollectorJob: Job? = null
 
     private val _selectedAsset = MutableStateFlow<AssetChoice?>(null)
     val selectedAsset: StateFlow<AssetChoice?> = _selectedAsset.asStateFlow()
@@ -149,13 +156,42 @@ class TradingEngine private constructor(
     ): Boolean {
         val ric = _selectedAsset.value?.ric ?: return false
         val amountMinor = (amountDisplay * BO_DEAL_AMOUNT_DISPLAY_SCALE).toLong().coerceAtLeast(1L)
-        return webSocketManager.sendBoCreateDeal(
+        val ref = webSocketManager.sendBoCreateDeal(
             ric = ric,
             trend = trend,
             amountMinor = amountMinor,
             dealType = dealType,
             durationSeconds = durationSeconds,
-        )
+        ) ?: return false
+
+        val indicators = _indicatorState.value
+        val config = tradingConfig.value
+        engineScope.launch(Dispatchers.IO) {
+            botDealDao.insert(
+                BotDealEntity(
+                    ric = ric,
+                    trend = trend,
+                    dealType = dealType,
+                    amountMinor = amountMinor,
+                    durationSeconds = durationSeconds,
+                    strategy = config.strategy.storageKey,
+                    rsi = indicators.rsi,
+                    macd = indicators.macd,
+                    macdSignal = indicators.signal,
+                    histogram = indicators.histogram,
+                    bbUpper = indicators.bbUpper,
+                    bbMiddle = indicators.bbMiddle,
+                    bbLower = indicators.bbLower,
+                    priceActionNote = indicators.priceActionNote,
+                    wsRef = ref,
+                    serverDealUuid = null,
+                    wsReplyStatus = "pending",
+                    wsReplyMessage = null,
+                    createdAt = System.currentTimeMillis(),
+                ),
+            )
+        }
+        return true
     }
 
     /**
@@ -166,6 +202,7 @@ class TradingEngine private constructor(
         webSocketManager.connect(context)
         assetSocketManager.connect(context)
         startTickCollectionIfNeeded()
+        startBoResultCollectorIfNeeded()
     }
 
     /**
@@ -175,6 +212,8 @@ class TradingEngine private constructor(
         _isEngineRunning.value = false
         tickCollectorJob?.cancel()
         tickCollectorJob = null
+        boResultCollectorJob?.cancel()
+        boResultCollectorJob = null
         webSocketManager.disconnect()
         assetSocketManager.disconnect()
     }
@@ -199,6 +238,33 @@ class TradingEngine private constructor(
                         timeframeSeconds = _selectedTimeframe.value,
                     )
                     calculateSignals()
+                }
+            }
+        }
+    }
+
+    private fun startBoResultCollectorIfNeeded() {
+        if (boResultCollectorJob?.isActive == true) return
+        boResultCollectorJob = engineScope.launch(Dispatchers.IO) {
+            webSocketManager.boCreateResults.collect { result ->
+                val ref = when (result) {
+                    is BoCreateDealResult.Ok -> result.clientRef
+                    is BoCreateDealResult.Error -> result.clientRef
+                }
+                val pending = botDealDao.findPendingByRef(ref) ?: return@collect
+                when (result) {
+                    is BoCreateDealResult.Ok -> botDealDao.updateReplyStatus(
+                        id = pending.id,
+                        status = "ok",
+                        uuid = result.dealUuid,
+                        message = null,
+                    )
+                    is BoCreateDealResult.Error -> botDealDao.updateReplyStatus(
+                        id = pending.id,
+                        status = "error",
+                        uuid = null,
+                        message = result.message,
+                    )
                 }
             }
         }
@@ -326,7 +392,7 @@ class TradingEngine private constructor(
 
         fun getInstance(application: Application, dataStoreManager: DataStoreManager): TradingEngine {
             return instance ?: synchronized(this) {
-                instance ?: TradingEngine(dataStoreManager).also { instance = it }
+                instance ?: TradingEngine(application, dataStoreManager).also { instance = it }
             }
         }
     }

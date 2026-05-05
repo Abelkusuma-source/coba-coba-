@@ -20,6 +20,8 @@ sealed class Screen(val route: String, val title: String, val icon: ImageVector?
     object Debug : Screen("debug", "Debug", Icons.Default.BugReport)
     /** Isi Room (`trade_deals`, `asset_choices`); bisa dibuka dari tab Debug atau navigasi langsung. */
     object DebugDb : Screen("debug_db", "Room DB", Icons.Default.BugReport)
+    /** Isi Room bot (`bot_deals`); dibuka dari tab Debug atau navigasi langsung. */
+    object DebugBotDb : Screen("debug_bot_db", "Bot DB", Icons.Default.BugReport)
 }
 
 val bottomNavItems = listOf(

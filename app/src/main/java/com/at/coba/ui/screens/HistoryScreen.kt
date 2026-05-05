@@ -8,6 +8,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Android
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
@@ -28,9 +29,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.at.coba.data.repository.AssetsRepository
+import com.at.coba.data.TradingStrategy
 import com.at.coba.R
 import java.text.SimpleDateFormat
 import java.util.*
+
+enum class HistoryRowSource {
+    Server,
+    Bot,
+}
 
 // 2. Data History disesuaikan dengan structure data asli
 data class HistoryItem(
@@ -42,7 +49,11 @@ data class HistoryItem(
     val currency: String,    // IDR, USD
     val amount: Double,
     val profit: Double,
-    val createdAt: Long
+    val createdAt: Long,
+    val serverUuid: String? = null,
+    val source: HistoryRowSource = HistoryRowSource.Server,
+    val botLocalId: Long? = null,
+    val botStrategyKey: String? = null,
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -161,7 +172,15 @@ fun HistoryScreen(viewModel: HistoryViewModel) {
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 modifier = Modifier.fillMaxSize()
             ) {
-                items(filteredItems, key = { it.id }) { item ->
+                items(
+                    items = filteredItems,
+                    key = { item ->
+                        when (item.source) {
+                            HistoryRowSource.Bot -> "bot_${item.botLocalId ?: item.id}"
+                            HistoryRowSource.Server -> "srv_${item.id}_${item.accountMode}"
+                        }
+                    },
+                ) { item ->
                     HistoryCard(
                         item = item,
                         onClick = {
@@ -189,9 +208,10 @@ fun HistoryScreen(viewModel: HistoryViewModel) {
 
 @Composable
 fun HistoryCard(item: HistoryItem, onClick: () -> Unit) {
-    val statusColor = when (item.status.lowercase()) {
+    val statusLower = item.status.lowercase()
+    val statusColor = when (statusLower) {
         "won" -> Color(0xFF4CAF50)
-        "lost" -> Color(0xFFF44336)
+        "lost", "fail", "failed" -> Color(0xFFF44336)
         else -> MaterialTheme.colorScheme.onSurfaceVariant
     }
 
@@ -211,12 +231,39 @@ fun HistoryCard(item: HistoryItem, onClick: () -> Unit) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = item.pair,
-                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(
+                            text = item.pair,
+                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        if (item.source == HistoryRowSource.Bot) {
+                            Surface(
+                                color = MaterialTheme.colorScheme.tertiaryContainer,
+                                shape = MaterialTheme.shapes.extraSmall,
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Android,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(14.dp),
+                                        tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                                    )
+                                    Text(
+                                        text = stringResource(R.string.history_badge_bot),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                        fontWeight = FontWeight.Bold,
+                                    )
+                                }
+                            }
+                        }
+                    }
                     Text(text = formattedDate, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Surface(
@@ -290,9 +337,11 @@ fun HistoryCard(item: HistoryItem, onClick: () -> Unit) {
 
 @Composable
 fun OrderDetailBottomSheetContent(item: HistoryItem) {
-    val statusColor = when (item.status.lowercase()) {
+    val statusLower = item.status.lowercase()
+    val statusColor = when (statusLower) {
         "won" -> Color(0xFF4CAF50)
-        "lost" -> Color(0xFFF44336)
+        "lost", "lose", "failed" -> Color(0xFFF44336)
+        "tie", "draw", "equal" -> MaterialTheme.colorScheme.onSurfaceVariant
         else -> MaterialTheme.colorScheme.onSurfaceVariant
     }
     val typeColor = if (item.type == "BUY") Color(0xFF2196F3) else Color(0xFFE91E63)
@@ -313,6 +362,10 @@ fun OrderDetailBottomSheetContent(item: HistoryItem) {
 
         DetailRow(stringResource(R.string.pair), item.pair, MaterialTheme.colorScheme.primary)
 
+        if (item.source == HistoryRowSource.Bot && item.botStrategyKey != null) {
+            val label = TradingStrategy.fromStorageKey(item.botStrategyKey).displayLabel
+            DetailRow(stringResource(R.string.history_strategy), label, MaterialTheme.colorScheme.tertiary)
+        }
         Row(
             modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
             horizontalArrangement = Arrangement.SpaceBetween,

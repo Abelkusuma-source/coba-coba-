@@ -36,7 +36,7 @@ This is a Jetpack Compose Android app with a single-activity architecture using 
 
 ### Navigation Patterns
 - Bottom nav items: Trade, History, Web, Profile
-- Debug screen accessible from any screen via top bar bug icon (tabs: DataStore vs Room DB); optional route `debug_db` for full-screen Room inspector
+- Debug screen accessible from any screen via top bar bug icon (tabs: DataStore, Room DB, Bot DB); optional routes `debug_db` and `debug_bot_db` for full-screen inspectors
 - Back navigation uses `navController.navigateUp()`
 - Screen transitions use slide + fade animations
 
@@ -49,7 +49,11 @@ This is a Jetpack Compose Android app with a single-activity architecture using 
 
 ### Data Persistence
 - App preferences and session: DataStore Preferences
-- Cached trade deals and asset list: Room (`CobaDatabase`)
+- **Two separate Room databases** with clear entity boundaries:
+  - `CobaDatabase` (`coba.db`): server-synced data — `trade_deals` (REST API history cache; includes optional `serverUuid` for deal correlation) and `asset_choices`
+  - `BotDatabase` (`bot.db`): local bot data — `bot_deals` (deals placed by TradingEngine with indicator snapshots and WS reply status)
+- **History screen** merges server `trade_deals` with `bot_deals` (same list, sorted by time). Rows from the bot DB show a **Bot** badge (Android icon). Won/loss for bot rows is resolved when a server deal with the same `serverUuid` exists after history sync (`BotDealPresentation`).
+- Singleton providers: `DatabaseProvider` for `CobaDatabase`, `BotDatabaseProvider` for `BotDatabase`
 - Keys defined as constants in `DataStoreManager.Companion`
 - Flows for reactive UI updates, suspend functions for writes
 - Device ID auto-generated if missing
@@ -81,7 +85,9 @@ This is a Jetpack Compose Android app with a single-activity architecture using 
 
 ## Debugging
 - Debug screen accessible via top bar icon on any screen
+- Three tabs: **DataStore**, **Room DB** (server history), **Bot DB** (bot deal history)
 - DataStore values exposed via `DataStoreManager.allData` flow
 - Room tables `trade_deals` and `asset_choices` visible in Debug → Room DB tab or `Screen.DebugDb` route
+- Bot table `bot_deals` visible in Debug → Bot DB tab or `Screen.DebugBotDb` route (strategy-specific indicator lines, lifecycle status open/won/awaiting, WS reply; settlement line when matched to `trade_deals` by UUID)
 - Build version displayed in top bar (fetched from packageManager)
 - OkHttp logging for network requests

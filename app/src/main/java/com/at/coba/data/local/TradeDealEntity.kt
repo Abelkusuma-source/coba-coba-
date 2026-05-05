@@ -13,4 +13,6 @@ data class TradeDealEntity(
     val amount: Double,
     val profit: Double,
     val createdAt: Long,
+    /** Server deal UUID kalau ada di payload history (untuk korelasi dengan `bot_deals`). */
+    val serverUuid: String? = null,
 )

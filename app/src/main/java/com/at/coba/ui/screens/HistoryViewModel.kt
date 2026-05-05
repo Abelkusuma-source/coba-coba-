@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.at.coba.data.DataStoreManager
 import com.at.coba.data.local.DatabaseProvider
+import com.at.coba.data.local.BotDatabaseProvider
 import com.at.coba.data.local.toEntity
 import com.at.coba.data.local.toHistoryItem
 import com.at.coba.data.local.toTradeDealEntity
@@ -17,8 +18,9 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import com.at.coba.util.BotDealPresentation
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -28,19 +30,40 @@ class HistoryViewModel(
 ) : AndroidViewModel(application) {
 
     private val db = DatabaseProvider.get(application)
+    private val botDb = BotDatabaseProvider.get(application)
     private val dataStore = DataStoreManager(application)
 
     private val accountFilterFlow = MutableStateFlow("All")
 
     val items: StateFlow<List<HistoryItem>> = accountFilterFlow
         .flatMapLatest { filter ->
-            when (filter) {
+            val serverFlow = when (filter) {
                 "Real" -> db.tradeDealDao().observeByAccount("Real")
                 "Demo" -> db.tradeDealDao().observeByAccount("Demo")
                 else -> db.tradeDealDao().observeAll()
             }
+            combine(serverFlow, botDb.botDealDao().observeAll()) { serverEntities, botEntities ->
+                val uuidIndex = BotDealPresentation.indexServerDealsByUuid(serverEntities)
+                val filteredBots = when (filter) {
+                    "Real" -> botEntities.filter { it.dealType.equals("real", ignoreCase = true) }
+                    "Demo" -> botEntities.filter { it.dealType.equals("demo", ignoreCase = true) }
+                    else -> botEntities
+                }
+                val botUuidsWithRow = filteredBots.mapNotNull { it.serverDealUuid?.trim()?.takeIf { u -> u.isNotEmpty() } }.toSet()
+                val serverRows = serverEntities
+                    .map { it.toHistoryItem() }
+                    .filter { row ->
+                        val u = row.serverUuid?.trim()
+                        u.isNullOrEmpty() || u !in botUuidsWithRow
+                    }
+                val botRows = filteredBots.map { bot ->
+                    val uuid = bot.serverDealUuid?.trim()?.takeIf { it.isNotEmpty() }
+                    val matched = uuid?.let { uuidIndex[it] }
+                    BotDealPresentation.botDealToHistoryItem(bot, matched)
+                }
+                (serverRows + botRows).sortedByDescending { it.createdAt }
+            }
         }
-        .map { entities -> entities.map { it.toHistoryItem() } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /** Daftar **ric** untuk filter Pair: cache Room (`asset_choices`), sinkron dari `/bo-assets/v6/assets`. */

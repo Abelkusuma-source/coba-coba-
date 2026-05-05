@@ -144,6 +144,7 @@ class WebSocketManager(private val dataStoreManager: DataStoreManager) {
      * Kirim deal turbo BO lewat Phoenix. [amountMinor] mengikuti skala API (÷100 untuk tampilan seperti riwayat).
      * @param trend `call` (naik) atau `put` (turun)
      * @param dealType `demo` atau `real`
+     * @return Phoenix ref string for correlation, or `null` when the send could not be performed.
      */
     fun sendBoCreateDeal(
         ric: String,
@@ -151,11 +152,11 @@ class WebSocketManager(private val dataStoreManager: DataStoreManager) {
         amountMinor: Long,
         dealType: String,
         durationSeconds: Int,
-    ): Boolean {
-        val ws = webSocket ?: return false
-        if (_connectionStatus.value !is WebSocketStatus.Connected) return false
+    ): String? {
+        val ws = webSocket ?: return null
+        if (_connectionStatus.value !is WebSocketStatus.Connected) return null
         val joinRef = boPhxJoinRef
-        if (joinRef.isEmpty()) return false
+        if (joinRef.isEmpty()) return null
 
         val nowMs = System.currentTimeMillis()
         val expireSec = BoExpireAtCalculator.expireAtEpochSeconds(
@@ -179,7 +180,7 @@ class WebSocketManager(private val dataStoreManager: DataStoreManager) {
         val frame =
             """{"topic":"bo","event":"create","payload":$payloadJson,"ref":"$refStr","join_ref":"$joinRef"}"""
         synchronized(pendingLock) { pendingCreateRefs.add(refStr) }
-        return ws.send(frame)
+        return if (ws.send(frame)) refStr else null
     }
 
     private fun dispatchBoPhxReplyIfAny(text: String) {

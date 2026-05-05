@@ -137,6 +137,14 @@ object TradeHistoryRepository {
         )
             ?: System.currentTimeMillis()
 
+        val serverUuid = o.firstString(
+            "uuid",
+            "deal_uuid",
+            "dealUuid",
+            "guid",
+            "external_uuid",
+        )
+
         return HistoryItem(
             id = id,
             pair = pair,
@@ -146,7 +154,8 @@ object TradeHistoryRepository {
             currency = currency,
             amount = amount / AMOUNT_UTIL_SCALE,
             profit = profitRaw / AMOUNT_UTIL_SCALE,
-            createdAt = createdMs
+            createdAt = createdMs,
+            serverUuid = serverUuid,
         )
     }
 

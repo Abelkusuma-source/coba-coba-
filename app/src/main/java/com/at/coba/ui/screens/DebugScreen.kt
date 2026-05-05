@@ -43,6 +43,11 @@ fun DebugScreen(
                 onClick = { selectedTab = 1 },
                 text = { Text("Room DB") },
             )
+            Tab(
+                selected = selectedTab == 2,
+                onClick = { selectedTab = 2 },
+                text = { Text("Bot DB") },
+            )
         }
         when (selectedTab) {
             0 -> DataStoreDebugTab(dataStoreManager = dataStoreManager)
@@ -56,6 +61,17 @@ fun DebugScreen(
                     }
                 }
                 DebugDatabasePanel(modifier = Modifier.weight(1f))
+            }
+            2 -> Column(modifier = Modifier.fillMaxSize()) {
+                navController?.let { nav ->
+                    TextButton(
+                        onClick = { nav.navigate(Screen.DebugBotDb.route) },
+                        modifier = Modifier.padding(horizontal = 8.dp),
+                    ) {
+                        Text("Buka layar penuh Bot DB")
+                    }
+                }
+                DebugBotDatabasePanel(modifier = Modifier.weight(1f))
             }
         }
     }

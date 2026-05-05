@@ -1,6 +1,7 @@
 package com.at.coba.data.local
 
 import com.at.coba.ui.screens.HistoryItem
+import com.at.coba.ui.screens.HistoryRowSource
 
 fun HistoryItem.toTradeDealEntity(): TradeDealEntity = TradeDealEntity(
     dealId = id,
@@ -12,6 +13,7 @@ fun HistoryItem.toTradeDealEntity(): TradeDealEntity = TradeDealEntity(
     amount = amount,
     profit = profit,
     createdAt = createdAt,
+    serverUuid = serverUuid,
 )
 
 fun TradeDealEntity.toHistoryItem(): HistoryItem = HistoryItem(
@@ -24,4 +26,8 @@ fun TradeDealEntity.toHistoryItem(): HistoryItem = HistoryItem(
     amount = amount,
     profit = profit,
     createdAt = createdAt,
+    serverUuid = serverUuid,
+    source = HistoryRowSource.Server,
+    botLocalId = null,
+    botStrategyKey = null,
 )

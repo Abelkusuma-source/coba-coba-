@@ -8,7 +8,7 @@ import androidx.room.RoomDatabase
         TradeDealEntity::class,
         AssetChoiceEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = false,
 )
 abstract class CobaDatabase : RoomDatabase() {
