@@ -70,4 +70,13 @@
     <string name="deal_order_amount_invalid">Jumlah tidak valid</string>
     <string name="deal_order_ok">Deal dibuat: %1$s</string>
     <string name="deal_order_err">Order gagal: %1$s</string>
+
+    <!-- Trading foreground service -->
+    <string name="trading_service_title">Trading engine</string>
+    <string name="trading_service_running">Menjalankan sinyal live…</string>
+    <string name="trading_service_channel_name">Trading engine</string>
+    <string name="trading_service_channel_desc">Koneksi WebSocket dan sinyal saat auto-trade</string>
+    <string name="trading_signal_buy">Sinyal: BUY</string>
+    <string name="trading_signal_sell">Sinyal: SELL</string>
+    <string name="trading_signal_scan">Sinyal: scanning</string>
 </resources>

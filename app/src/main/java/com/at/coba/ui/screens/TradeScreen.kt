@@ -50,8 +50,10 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.at.coba.R
 import com.at.coba.data.repository.AssetChoice
+import com.at.coba.data.IndicatorState
 import com.at.coba.data.TradingConfig
 import com.at.coba.data.TradingStrategy
+import com.at.coba.data.TradeSignal
 import com.at.coba.data.network.BoCreateDealResult
 import com.at.coba.data.network.WebSocketStatus
 import com.at.coba.ui.components.ProfessionalCandlestickChart
@@ -426,7 +428,7 @@ fun TradeScreen(viewModel: TradeViewModel) {
         // 6. START/STOP button
         Button(
             onClick = {
-                if (isRunning) viewModel.stopConnection()
+                if (isRunning) viewModel.stopConnection(context)
                 else viewModel.startConnection(context)
             },
             modifier = Modifier
