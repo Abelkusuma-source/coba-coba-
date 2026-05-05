@@ -56,4 +56,18 @@
     <string name="trading_config_error_bb_period_range">BB period must be between %1$d and %2$d</string>
     <string name="trading_config_error_bb_std_range">BB std dev must be between %1$.1f and %2$.1f</string>
     <string name="trading_config_rsi_required">RSI period is required</string>
+
+    <!-- BO turbo order (Phoenix WS) -->
+    <string name="deal_order_section">Order turbo (WS)</string>
+    <string name="deal_order_amount_label">Jumlah (tampilan, skala ×100 ke API)</string>
+    <string name="deal_order_duration_label">Durasi (detik)</string>
+    <string name="deal_order_mode_demo">Demo</string>
+    <string name="deal_order_mode_real">Real</string>
+    <string name="deal_order_buy">BUY (call)</string>
+    <string name="deal_order_sell">SELL (put)</string>
+    <string name="deal_order_ws_required">Hubungkan Main WebSocket (START) dulu</string>
+    <string name="deal_order_asset_required">Pilih pasangan aset</string>
+    <string name="deal_order_amount_invalid">Jumlah tidak valid</string>
+    <string name="deal_order_ok">Deal dibuat: %1$s</string>
+    <string name="deal_order_err">Order gagal: %1$s</string>
 </resources>

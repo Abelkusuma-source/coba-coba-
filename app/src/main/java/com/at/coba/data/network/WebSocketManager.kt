@@ -2,12 +2,18 @@ package com.at.coba.data.network
 
 import android.content.Context
 import com.at.coba.data.DataStoreManager
+import com.google.gson.GsonBuilder
+import com.google.gson.JsonParser
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -33,6 +39,14 @@ class WebSocketManager(private val dataStoreManager: DataStoreManager) {
     private var pingJob: Job? = null
     private var refCounter = 1
 
+    /** `ref` client pada `phx_join` topic `bo` — dipakai sebagai `join_ref` pada event `create`. */
+    @Volatile
+    private var boPhxJoinRef: String = ""
+
+    private val gson = GsonBuilder().serializeNulls().create()
+    private val pendingCreateRefs = mutableSetOf<String>()
+    private val pendingLock = Any()
+
     @Volatile
     private var assetChannelRic: String = AssetSocketManager.DEFAULT_RIC
 
@@ -41,6 +55,12 @@ class WebSocketManager(private val dataStoreManager: DataStoreManager) {
 
     private val _receivedMessage = MutableStateFlow<String?>(null)
     val receivedMessage: StateFlow<String?> = _receivedMessage.asStateFlow()
+
+    private val _boCreateResults = MutableSharedFlow<BoCreateDealResult>(
+        extraBufferCapacity = 32,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST,
+    )
+    val boCreateResults: SharedFlow<BoCreateDealResult> = _boCreateResults.asSharedFlow()
 
     companion object {
         private const val WS_URL = "wss://ws.stockity.id/?v=2&vsn=2.0.0"
@@ -91,6 +111,7 @@ class WebSocketManager(private val dataStoreManager: DataStoreManager) {
 
                     override fun onMessage(webSocket: WebSocket, text: String) {
                         _receivedMessage.value = text
+                        dispatchBoPhxReplyIfAny(text)
                     }
 
                     override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
@@ -114,7 +135,86 @@ class WebSocketManager(private val dataStoreManager: DataStoreManager) {
         webSocket = null
         _connectionStatus.value = WebSocketStatus.Disconnected
         _receivedMessage.value = null
+        boPhxJoinRef = ""
+        synchronized(pendingLock) { pendingCreateRefs.clear() }
         stopTimers()
+    }
+
+    /**
+     * Kirim deal turbo BO lewat Phoenix. [amountMinor] mengikuti skala API (÷100 untuk tampilan seperti riwayat).
+     * @param trend `call` (naik) atau `put` (turun)
+     * @param dealType `demo` atau `real`
+     */
+    fun sendBoCreateDeal(
+        ric: String,
+        trend: String,
+        amountMinor: Long,
+        dealType: String,
+        durationSeconds: Int,
+    ): Boolean {
+        val ws = webSocket ?: return false
+        if (_connectionStatus.value !is WebSocketStatus.Connected) return false
+        val joinRef = boPhxJoinRef
+        if (joinRef.isEmpty()) return false
+
+        val nowMs = System.currentTimeMillis()
+        val expireSec = BoExpireAtCalculator.expireAtEpochSeconds(
+            durationSeconds.coerceAtLeast(5),
+            nowMs,
+        )
+        val payload = BoCreateDealPayload(
+            createdAtMillis = nowMs,
+            ric = ric.trim(),
+            dealType = dealType.lowercase(),
+            expireAtEpochSeconds = expireSec,
+            optionType = "turbo",
+            trend = trend.lowercase(),
+            tournamentId = null,
+            isState = false,
+            amount = amountMinor,
+        )
+        val payloadJson = gson.toJson(payload)
+        val ref = refCounter++
+        val refStr = ref.toString()
+        val frame =
+            """{"topic":"bo","event":"create","payload":$payloadJson,"ref":"$refStr","join_ref":"$joinRef"}"""
+        synchronized(pendingLock) { pendingCreateRefs.add(refStr) }
+        return ws.send(frame)
+    }
+
+    private fun dispatchBoPhxReplyIfAny(text: String) {
+        try {
+            val root = JsonParser.parseString(text).asJsonObject
+            if (root.get("event")?.asString != "phx_reply") return
+            if (root.get("topic")?.asString != "bo") return
+            val ref = root.get("ref")?.asString ?: return
+            synchronized(pendingLock) {
+                if (!pendingCreateRefs.contains(ref)) return
+                pendingCreateRefs.remove(ref)
+            }
+
+            val payload = root.getAsJsonObject("payload") ?: run {
+                scope.launch { _boCreateResults.emit(BoCreateDealResult.Error(ref, "empty payload")) }
+                return
+            }
+            val status = payload.get("status")?.asString
+            if (status == "ok") {
+                val uuid = try {
+                    payload.getAsJsonObject("response")?.get("uuid")?.asString
+                } catch (_: Exception) {
+                    null
+                }
+                scope.launch { _boCreateResults.emit(BoCreateDealResult.Ok(ref, uuid)) }
+            } else {
+                val errMsg = try {
+                    payload.get("response")?.toString()
+                } catch (_: Exception) {
+                    null
+                } ?: status ?: "error"
+                scope.launch { _boCreateResults.emit(BoCreateDealResult.Error(ref, errMsg)) }
+            }
+        } catch (_: Exception) {
+        }
     }
 
     /**
@@ -138,19 +238,21 @@ class WebSocketManager(private val dataStoreManager: DataStoreManager) {
 
     private fun sendSubscribeMessages(webSocket: WebSocket) {
         val ric = assetChannelRic
-        val messages = listOf(
-            """{"topic":"connection","event":"phx_join","payload":{},"ref":"${refCounter++}","join_ref":"1"}""",
-            """{"topic":"bo","event":"phx_join","payload":{},"ref":"${refCounter++}","join_ref":"${refCounter - 1}"}""",
-            """{"topic":"marathon","event":"phx_join","payload":{},"ref":"${refCounter++}","join_ref":"${refCounter - 1}"}""",
-            """{"topic":"user","event":"phx_join","payload":{},"ref":"${refCounter++}","join_ref":"${refCounter - 1}"}""",
-            """{"topic":"account","event":"phx_join","payload":{},"ref":"${refCounter++}","join_ref":"${refCounter - 1}"}""",
-            """{"topic":"tournament","event":"phx_join","payload":{},"ref":"${refCounter++}","join_ref":"${refCounter - 1}"}""",
-            """{"topic":"cfd_zero_spread","event":"phx_join","payload":{},"ref":"${refCounter++}","join_ref":"${refCounter - 1}"}""",
-            """{"topic":"asset","event":"phx_join","payload":{},"ref":"${refCounter++}","join_ref":"${refCounter - 1}"}""",
-            """{"topic":"copy_trading","event":"phx_join","payload":{},"ref":"${refCounter++}","join_ref":"${refCounter - 1}"}""",
-            """{"topic":"asset:$ric","event":"phx_join","payload":{},"ref":"${refCounter++}","join_ref":"${refCounter - 1}"}""",
-            """{"topic":"range_stream:$ric","event":"phx_join","payload":{},"ref":"${refCounter++}","join_ref":"${refCounter - 1}"}"""
-        )
+        val messages = buildList {
+            add("""{"topic":"connection","event":"phx_join","payload":{},"ref":"${refCounter++}","join_ref":"1"}""")
+            val boRef = refCounter++
+            boPhxJoinRef = boRef.toString()
+            add("""{"topic":"bo","event":"phx_join","payload":{},"ref":"$boRef","join_ref":"$boRef"}""")
+            add("""{"topic":"marathon","event":"phx_join","payload":{},"ref":"${refCounter++}","join_ref":"${refCounter - 1}"}""")
+            add("""{"topic":"user","event":"phx_join","payload":{},"ref":"${refCounter++}","join_ref":"${refCounter - 1}"}""")
+            add("""{"topic":"account","event":"phx_join","payload":{},"ref":"${refCounter++}","join_ref":"${refCounter - 1}"}""")
+            add("""{"topic":"tournament","event":"phx_join","payload":{},"ref":"${refCounter++}","join_ref":"${refCounter - 1}"}""")
+            add("""{"topic":"cfd_zero_spread","event":"phx_join","payload":{},"ref":"${refCounter++}","join_ref":"${refCounter - 1}"}""")
+            add("""{"topic":"asset","event":"phx_join","payload":{},"ref":"${refCounter++}","join_ref":"${refCounter - 1}"}""")
+            add("""{"topic":"copy_trading","event":"phx_join","payload":{},"ref":"${refCounter++}","join_ref":"${refCounter - 1}"}""")
+            add("""{"topic":"asset:$ric","event":"phx_join","payload":{},"ref":"${refCounter++}","join_ref":"${refCounter - 1}"}""")
+            add("""{"topic":"range_stream:$ric","event":"phx_join","payload":{},"ref":"${refCounter++}","join_ref":"${refCounter - 1}"}""")
+        }
         messages.forEach { webSocket.send(it) }
     }
 

@@ -12,6 +12,7 @@ import com.at.coba.data.TradingConfig
 import com.at.coba.data.TradingStrategy
 import com.at.coba.data.network.CookieManager
 import com.at.coba.data.network.AssetSocketManager
+import com.at.coba.data.network.BoCreateDealResult
 import com.at.coba.data.network.WebSocketManager
 import com.at.coba.data.network.WebSocketStatus
 import com.at.coba.data.network.AssetTick
@@ -24,6 +25,7 @@ import com.at.coba.util.PriceActionOutcome
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
@@ -99,6 +101,7 @@ class TradeViewModel(
 
     // Data dari WebSocket Utama (WS)
     val wsReceivedMessage: StateFlow<String?> = webSocketManager.receivedMessage
+    val boCreateResults: SharedFlow<BoCreateDealResult> = webSocketManager.boCreateResults
 
     // Data dari Asset Socket (AS)
     val asReceivedMessage: StateFlow<String?> = assetSocketManager.receivedMessage
@@ -344,6 +347,29 @@ class TradeViewModel(
     }
 
     /**
+     * Order turbo BO via Phoenix (`bo` / `create`). [amountDisplay] nilai tampilan; API memakai ×100 seperti riwayat deal.
+     * @param trend `call` (BUY) atau `put` (SELL)
+     * @param dealType `demo` atau `real`
+     * @return false bila tidak ada RIC terpilih atau socket belum siap
+     */
+    fun sendBoTurboDeal(
+        trend: String,
+        amountDisplay: Double,
+        durationSeconds: Int,
+        dealType: String,
+    ): Boolean {
+        val ric = _selectedAsset.value?.ric ?: return false
+        val amountMinor = (amountDisplay * BO_DEAL_AMOUNT_DISPLAY_SCALE).toLong().coerceAtLeast(1L)
+        return webSocketManager.sendBoCreateDeal(
+            ric = ric,
+            trend = trend,
+            amountMinor = amountMinor,
+            dealType = dealType,
+            durationSeconds = durationSeconds,
+        )
+    }
+
+    /**
      * Menghubungkan kedua socket sekaligus
      */
     fun startConnection(context: Context) {
@@ -388,6 +414,10 @@ class TradeViewModel(
     override fun onCleared() {
         super.onCleared()
         stopConnection()
+    }
+
+    companion object {
+        private const val BO_DEAL_AMOUNT_DISPLAY_SCALE = 100.0
     }
 
     class Factory(

@@ -28,6 +28,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -51,6 +52,7 @@ import com.at.coba.R
 import com.at.coba.data.repository.AssetChoice
 import com.at.coba.data.TradingConfig
 import com.at.coba.data.TradingStrategy
+import com.at.coba.data.network.BoCreateDealResult
 import com.at.coba.data.network.WebSocketStatus
 import com.at.coba.ui.components.ProfessionalCandlestickChart
 import com.at.coba.util.FieldIssue
@@ -59,8 +61,6 @@ import com.at.coba.util.TradingConfigField
 import com.at.coba.util.TradingConfigValidator
 import com.at.coba.util.ValidationResult
 import kotlinx.coroutines.launch
-
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TradeScreen(viewModel: TradeViewModel) {
     val context = LocalContext.current
@@ -78,6 +78,29 @@ fun TradeScreen(viewModel: TradeViewModel) {
     val isAssetsLoading by viewModel.isAssetsLoading.collectAsStateWithLifecycle()
     val assetsLoadError by viewModel.assetsLoadError.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+
+    var dealAmountText by remember { mutableStateOf("10000") }
+    var dealDurationSec by remember { mutableIntStateOf(30) }
+    var dealIsDemo by remember { mutableStateOf(true) }
+
+    LaunchedEffect(Unit) {
+        viewModel.boCreateResults.collect { result ->
+            when (result) {
+                is BoCreateDealResult.Ok -> {
+                    val uuid = result.dealUuid ?: "—"
+                    snackbarHostState.showSnackbar(
+                        context.getString(R.string.deal_order_ok, uuid),
+                    )
+                }
+                is BoCreateDealResult.Error -> {
+                    snackbarHostState.showSnackbar(
+                        context.getString(R.string.deal_order_err, result.message),
+                    )
+                }
+            }
+        }
+    }
 
     val isRunning = wsStatus !is WebSocketStatus.Disconnected || asStatus !is WebSocketStatus.Disconnected
     val scrollState = rememberScrollState()
@@ -263,6 +286,137 @@ fun TradeScreen(viewModel: TradeViewModel) {
                         fontSize = 12.sp,
                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                     )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // 5b. BO turbo order (Phoenix `bo` / `create`)
+        val wsReady = wsStatus is WebSocketStatus.Connected
+        val orderEnabled = wsReady && selectedAsset != null
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+            ),
+            shape = RoundedCornerShape(12.dp),
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = stringResource(R.string.deal_order_section),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = dealAmountText,
+                    onValueChange = { dealAmountText = it.filter { ch -> ch.isDigit() || ch == '.' } },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text(stringResource(R.string.deal_order_amount_label)) },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    singleLine = true,
+                    shape = RoundedCornerShape(8.dp),
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                LabeledDropdown(
+                    label = stringResource(R.string.deal_order_duration_label),
+                    options = listOf(30 to "30 s", 60 to "60 s", 120 to "120 s", 300 to "5 min"),
+                    selectedValue = dealDurationSec,
+                    onSelect = { dealDurationSec = it },
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    FilterChip(
+                        selected = dealIsDemo,
+                        onClick = { dealIsDemo = true },
+                        label = { Text(stringResource(R.string.deal_order_mode_demo)) },
+                        modifier = Modifier.weight(1f),
+                    )
+                    FilterChip(
+                        selected = !dealIsDemo,
+                        onClick = { dealIsDemo = false },
+                        label = { Text(stringResource(R.string.deal_order_mode_real)) },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                if (!dealIsDemo) {
+                    Text(
+                        text = "Real: gunakan dengan hati-hati.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    fun submit(trend: String) {
+                        if (!wsReady) {
+                            scope.launch {
+                                snackbarHostState.showSnackbar(
+                                    context.getString(R.string.deal_order_ws_required),
+                                )
+                            }
+                            return
+                        }
+                        if (selectedAsset == null) {
+                            scope.launch {
+                                snackbarHostState.showSnackbar(
+                                    context.getString(R.string.deal_order_asset_required),
+                                )
+                            }
+                            return
+                        }
+                        val amt = dealAmountText.toDoubleOrNull()
+                        if (amt == null || amt <= 0.0) {
+                            scope.launch {
+                                snackbarHostState.showSnackbar(
+                                    context.getString(R.string.deal_order_amount_invalid),
+                                )
+                            }
+                            return
+                        }
+                        val sent = viewModel.sendBoTurboDeal(
+                            trend = trend,
+                            amountDisplay = amt,
+                            durationSeconds = dealDurationSec,
+                            dealType = if (dealIsDemo) "demo" else "real",
+                        )
+                        if (!sent) {
+                            scope.launch {
+                                snackbarHostState.showSnackbar(
+                                    context.getString(R.string.deal_order_ws_required),
+                                )
+                            }
+                        }
+                    }
+                    Button(
+                        onClick = { submit("call") },
+                        enabled = orderEnabled,
+                        modifier = Modifier.weight(1f).height(48.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF2E7D32),
+                        ),
+                    ) {
+                        Text(stringResource(R.string.deal_order_buy), fontWeight = FontWeight.Bold)
+                    }
+                    Button(
+                        onClick = { submit("put") },
+                        enabled = orderEnabled,
+                        modifier = Modifier.weight(1f).height(48.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFFC62828),
+                        ),
+                    ) {
+                        Text(stringResource(R.string.deal_order_sell), fontWeight = FontWeight.Bold)
+                    }
                 }
             }
         }
