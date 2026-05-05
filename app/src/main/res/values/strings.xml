@@ -79,4 +79,5 @@
     <string name="trading_signal_buy">Sinyal: BUY</string>
     <string name="trading_signal_sell">Sinyal: SELL</string>
     <string name="trading_signal_scan">Sinyal: scanning</string>
+    <string name="trading_service_notif_required">Izin notifikasi diperlukan untuk trading di background</string>
 </resources>

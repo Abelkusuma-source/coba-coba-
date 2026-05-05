@@ -1,5 +1,10 @@
 package com.at.coba.ui.screens
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -62,6 +67,7 @@ import com.at.coba.util.TradingConfigErrorCode
 import com.at.coba.util.TradingConfigField
 import com.at.coba.util.TradingConfigValidator
 import com.at.coba.util.ValidationResult
+import androidx.core.content.ContextCompat
 import kotlinx.coroutines.launch
 @Composable
 fun TradeScreen(viewModel: TradeViewModel) {
@@ -82,9 +88,25 @@ fun TradeScreen(viewModel: TradeViewModel) {
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
+    val isEngineRunning by viewModel.isEngineRunning.collectAsStateWithLifecycle(false)
+
     var dealAmountText by remember { mutableStateOf("10000") }
     var dealDurationSec by remember { mutableIntStateOf(30) }
     var dealIsDemo by remember { mutableStateOf(true) }
+
+    val notifPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            viewModel.startConnection(context)
+        } else {
+            scope.launch {
+                snackbarHostState.showSnackbar(
+                    context.getString(R.string.trading_service_notif_required),
+                )
+            }
+        }
+    }
 
     LaunchedEffect(Unit) {
         viewModel.boCreateResults.collect { result ->
@@ -104,7 +126,7 @@ fun TradeScreen(viewModel: TradeViewModel) {
         }
     }
 
-    val isRunning = wsStatus !is WebSocketStatus.Disconnected || asStatus !is WebSocketStatus.Disconnected
+    val isRunning = isEngineRunning
     val scrollState = rememberScrollState()
 
     Scaffold(
@@ -428,8 +450,18 @@ fun TradeScreen(viewModel: TradeViewModel) {
         // 6. START/STOP button
         Button(
             onClick = {
-                if (isRunning) viewModel.stopConnection(context)
-                else viewModel.startConnection(context)
+                if (isRunning) {
+                    viewModel.stopConnection(context)
+                } else {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                        ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
+                            != PackageManager.PERMISSION_GRANTED
+                    ) {
+                        notifPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    } else {
+                        viewModel.startConnection(context)
+                    }
+                }
             },
             modifier = Modifier
                 .fillMaxWidth()

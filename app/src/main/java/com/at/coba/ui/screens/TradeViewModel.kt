@@ -45,6 +45,7 @@ class TradeViewModel(
     val tradingConfig: StateFlow<TradingConfig> = engine.tradingConfig
     val candleHistory = engine.candleHistory
 
+    val isEngineRunning: StateFlow<Boolean> = engine.isEngineRunning
     val wsStatus = engine.webSocketManager.connectionStatus
     val asStatus = engine.assetSocketManager.connectionStatus
     val wsReceivedMessage = engine.webSocketManager.receivedMessage

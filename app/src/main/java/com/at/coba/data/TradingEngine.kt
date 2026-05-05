@@ -65,6 +65,9 @@ class TradingEngine private constructor(
     private val _indicatorState = MutableStateFlow(IndicatorState())
     val indicatorState: StateFlow<IndicatorState> = _indicatorState.asStateFlow()
 
+    private val _isEngineRunning = MutableStateFlow(false)
+    val isEngineRunning: StateFlow<Boolean> = _isEngineRunning.asStateFlow()
+
     val tradingConfig: StateFlow<TradingConfig> = dataStoreManager.tradingConfig
         .stateIn(engineScope, SharingStarted.Eagerly, TradingConfig())
 
@@ -159,6 +162,7 @@ class TradingEngine private constructor(
      * Hubungkan socket dan mulai proses tick → candle → sinyal.
      */
     fun startConnection(context: Context) {
+        _isEngineRunning.value = true
         webSocketManager.connect(context)
         assetSocketManager.connect(context)
         startTickCollectionIfNeeded()
@@ -168,6 +172,7 @@ class TradingEngine private constructor(
      * Putus socket dan hentikan collector tick.
      */
     fun stopConnection() {
+        _isEngineRunning.value = false
         tickCollectorJob?.cancel()
         tickCollectorJob = null
         webSocketManager.disconnect()
