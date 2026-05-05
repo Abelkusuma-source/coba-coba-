@@ -123,14 +123,14 @@ class HistoryViewModel(
         val dao = db.tradeDealDao()
         val entities = deals.map { it.toTradeDealEntity() }
         when (accountFilter) {
-            "Real" -> dao.replaceAccountDeals("Real", entities)
-            "Demo" -> dao.replaceAccountDeals("Demo", entities)
+            "Real" -> dao.mergeAccountDeals("Real", entities)
+            "Demo" -> dao.mergeAccountDeals("Demo", entities)
             else -> {
-                dao.replaceAccountDeals(
+                dao.mergeAccountDeals(
                     "Real",
                     entities.filter { it.accountMode == "Real" },
                 )
-                dao.replaceAccountDeals(
+                dao.mergeAccountDeals(
                     "Demo",
                     entities.filter { it.accountMode == "Demo" },
                 )
